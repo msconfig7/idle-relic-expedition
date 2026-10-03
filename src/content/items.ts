@@ -1,0 +1,25 @@
+import type { ItemBase } from '../game/types'
+
+export const itemBases: ItemBase[] = [
+  { id: 'iron-helm', name: 'Iron Helm', slotType: 'helmet', weaponHand: null, implicit: { stat: 'defense', value: 4 } },
+  { id: 'seers-circlet', name: "Seer's Circlet", slotType: 'helmet', weaponHand: null, implicit: { stat: 'int', value: 3 } },
+  { id: 'bone-amulet', name: 'Bone Amulet', slotType: 'amulet', weaponHand: null, implicit: { stat: 'hp', value: 12 } },
+  { id: 'jade-pendant', name: 'Jade Pendant', slotType: 'amulet', weaponHand: null, implicit: { stat: 'itemDrop', value: 0.02 } },
+  { id: 'short-sword', name: 'Short Sword', slotType: 'weapon', weaponHand: 'one_hand', implicit: { stat: 'attack', value: 6 } },
+  { id: 'hatchet', name: 'Hatchet', slotType: 'weapon', weaponHand: 'one_hand', implicit: { stat: 'attack', value: 7 } },
+  { id: 'runed-wand', name: 'Runed Wand', slotType: 'weapon', weaponHand: 'one_hand', implicit: { stat: 'int', value: 4 } },
+  { id: 'greatsword', name: 'Greatsword', slotType: 'weapon', weaponHand: 'two_hand', implicit: { stat: 'attack', value: 14 } },
+  { id: 'war-staff', name: 'War Staff', slotType: 'weapon', weaponHand: 'two_hand', implicit: { stat: 'attack', value: 12 } },
+  { id: 'oak-buckler', name: 'Oak Buckler', slotType: 'weapon', weaponHand: 'offhand', implicit: { stat: 'block', value: 0.04 } },
+  { id: 'focus-orb', name: 'Focus Orb', slotType: 'weapon', weaponHand: 'offhand', implicit: { stat: 'xpMod', value: 0.05 } },
+  { id: 'hide-armour', name: 'Hide Armour', slotType: 'armour', weaponHand: null, implicit: { stat: 'defense', value: 8 } },
+  { id: 'mail-hauberk', name: 'Mail Hauberk', slotType: 'armour', weaponHand: null, implicit: { stat: 'hp', value: 18 } },
+  { id: 'braided-belt', name: 'Braided Belt', slotType: 'belt', weaponHand: null, implicit: { stat: 'str', value: 3 } },
+  { id: 'sash', name: 'Explorer Sash', slotType: 'belt', weaponHand: null, implicit: { stat: 'goldMod', value: 0.05 } },
+  { id: 'copper-ring', name: 'Copper Ring', slotType: 'ring', weaponHand: null, implicit: { stat: 'attack', value: 2 } },
+  { id: 'signet', name: 'Relic Signet', slotType: 'ring', weaponHand: null, implicit: { stat: 'critChance', value: 0.02 } },
+  { id: 'work-gloves', name: 'Work Gloves', slotType: 'gloves', weaponHand: null, implicit: { stat: 'dex', value: 3 } },
+  { id: 'plated-gauntlets', name: 'Plated Gauntlets', slotType: 'gloves', weaponHand: null, implicit: { stat: 'defense', value: 3 } },
+  { id: 'trail-boots', name: 'Trail Boots', slotType: 'boots', weaponHand: null, implicit: { stat: 'dex', value: 2 } },
+  { id: 'greaves', name: 'Iron Greaves', slotType: 'boots', weaponHand: null, implicit: { stat: 'block', value: 0.02 } },
+]

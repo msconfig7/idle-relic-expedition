@@ -1,0 +1,449 @@
+import { allocationRemainsConnected, canAllocateNode, prunePending } from '../content/skillTree'
+import {
+  applyEquip,
+  applyUnequip,
+  applyKill,
+  deriveStats,
+  getRealm,
+  levelFromTotalXp,
+  nextRealm,
+  pickMonster,
+  spawnMonster,
+  strikeDamage,
+} from '../game'
+import { REALM_PROGRESS_CAP, START_NODE_ID, TICK_MS } from '../game/types'
+import { DEATH_COOLDOWN_MS, PLAYER_SWING_MS, MONSTER_SWING_MS } from '../game/types'
+import { mulberry32, hashSeed } from '../game/rng'
+import type {
+  CombatLogEntry,
+  CombatSnapshot,
+  DerivedStats,
+  EquipSlot,
+  FloatingHit,
+  Item,
+  OfflineGrant,
+  PlayerState,
+} from '../game/types'
+import { persistSave } from '../lib/persist'
+import { create } from 'zustand'
+
+type ScreenId = 'combat' | 'character' | 'inventory' | 'skills'
+
+type GameStore = {
+  ready: boolean
+  paused: boolean
+  dirty: boolean
+  screen: ScreenId
+  player: PlayerState | null
+  items: Item[]
+  stats: DerivedStats | null
+  combat: CombatSnapshot | null
+  monsterIndex: number
+  queuedMonsterIndex: number
+  selectedItemId: string | null
+  pendingNodeIds: number[]
+  pendingRemovalNodeIds: number[]
+  realmPickerOpen: boolean
+  offlineGrant: OfflineGrant | null
+  error: string | null
+  hydrate: (player: PlayerState, items: Item[]) => void
+  setScreen: (screen: ScreenId) => void
+  selectItem: (id: string | null) => void
+  queueMonster: (index: number) => void
+  tick: (dt?: number) => void
+  equip: (itemId: string, slot: EquipSlot) => void
+  unequip: (itemId: string) => void
+  queueNode: (nodeId: number) => void
+  confirmNodes: () => void
+  discardNodes: () => void
+  openRealmPicker: () => void
+  closeRealmPicker: () => void
+  selectRealm: (realmId: number) => void
+  acknowledgeOffline: () => void
+  markClean: () => void
+  setPaused: (paused: boolean) => void
+  persistNow: () => Promise<void>
+}
+
+let logSeq = 1
+let floatSeq = 1
+
+function pushLog(log: CombatLogEntry[], text: string): CombatLogEntry[] {
+  return [...log, { id: logSeq++, text }].slice(-18)
+}
+
+function pushFloat(floats: FloatingHit[], text: string, kind: FloatingHit['kind']): FloatingHit[] {
+  return [...floats, { id: floatSeq++, text, kind }].slice(-8)
+}
+
+function rebuildCombat(
+  player: PlayerState,
+  stats: DerivedStats,
+  monsterIndex: number,
+  previous?: CombatSnapshot | null,
+): CombatSnapshot {
+  const realm = getRealm(player.realmId)
+  const def = pickMonster(realm, monsterIndex)
+  const keepHp = previous ? Math.min(previous.playerHp, stats.hp) : stats.hp
+  return {
+    monster: spawnMonster(def),
+    playerHp: previous?.deathCooldownMs ? 0 : keepHp,
+    playerMaxHp: stats.hp,
+    playerSwing: 0,
+    monsterSwing: 0,
+    deathCooldownMs: previous?.deathCooldownMs ?? 0,
+    log: previous
+      ? pushLog(previous.log, `Hunting ${def.name}.`)
+      : [{ id: logSeq++, text: `${def.name} blocks the path.` }],
+    floats: [],
+  }
+}
+
+export const useGameStore = create<GameStore>((set, get) => ({
+  ready: false,
+  paused: true,
+  dirty: false,
+  screen: 'combat',
+  player: null,
+  items: [],
+  stats: null,
+  combat: null,
+  monsterIndex: 0,
+  queuedMonsterIndex: 0,
+  selectedItemId: null,
+  pendingNodeIds: [],
+  pendingRemovalNodeIds: [],
+  realmPickerOpen: false,
+  offlineGrant: null,
+  error: null,
+
+  hydrate: (player, items) => {
+    let highestRealmId = Math.max(player.highestRealmId ?? 1, player.realmId)
+    if (player.realmProgress >= REALM_PROGRESS_CAP) {
+      const nxt = nextRealm(player.realmId)
+      if (nxt) highestRealmId = Math.max(highestRealmId, nxt.id)
+    }
+    const synced = {
+      ...player,
+      level: levelFromTotalXp(player.xp),
+      highestRealmId,
+    }
+    const stats = deriveStats(synced, items)
+    set({
+      ready: true,
+      paused: false,
+      player: synced,
+      items,
+      stats,
+      combat: rebuildCombat(synced, stats, 0),
+      monsterIndex: 0,
+      queuedMonsterIndex: 0,
+      pendingNodeIds: [],
+      pendingRemovalNodeIds: [],
+      dirty: false,
+    })
+  },
+
+  setScreen: (screen) => set({ screen }),
+  selectItem: (id) => set({ selectedItemId: id }),
+  setPaused: (paused) => set({ paused }),
+  markClean: () => set({ dirty: false }),
+  acknowledgeOffline: () => set({ offlineGrant: null }),
+
+  queueMonster: (index) => {
+    const { player } = get()
+    if (!player) return
+    const realm = getRealm(player.realmId)
+    const nextIndex = ((index % realm.monsters.length) + realm.monsters.length) % realm.monsters.length
+    set({ queuedMonsterIndex: nextIndex })
+  },
+
+  tick: (dt = TICK_MS) => {
+    const { paused, player, items, combat, stats, monsterIndex, queuedMonsterIndex } = get()
+    if (paused || !player || !combat || !stats) return
+
+    let nextPlayer = player
+    let nextItems = items
+    let nextStats = stats
+    let nextMonsterIndex = monsterIndex
+    let dirty = false
+
+    if (combat.deathCooldownMs > 0) {
+      const remaining = Math.max(0, combat.deathCooldownMs - dt)
+      const revived = remaining === 0
+      let nextCombat = {
+        ...combat,
+        deathCooldownMs: remaining,
+        playerHp: revived ? stats.hp : 0,
+        playerMaxHp: stats.hp,
+        playerSwing: 0,
+        monsterSwing: 0,
+        log: revived ? pushLog(combat.log, 'You rise and fight again.') : combat.log,
+        floats: combat.floats.slice(-6),
+      }
+      if (revived && queuedMonsterIndex !== monsterIndex) {
+        nextMonsterIndex = queuedMonsterIndex
+        nextCombat = rebuildCombat(player, stats, nextMonsterIndex, {
+          ...nextCombat,
+          playerHp: stats.hp,
+          deathCooldownMs: 0,
+        })
+        nextCombat.log = pushLog(nextCombat.log, `The next hunt is ${getRealm(player.realmId).monsters[nextMonsterIndex].name}.`)
+      }
+      set({ combat: nextCombat, monsterIndex: nextMonsterIndex })
+      return
+    }
+
+    let nextCombat = {
+      ...combat,
+      playerSwing: combat.playerSwing + dt,
+      monsterSwing: combat.monsterSwing + dt,
+      floats: combat.floats.slice(-6),
+      playerMaxHp: stats.hp,
+    }
+    if (nextCombat.playerHp > 0 && nextCombat.playerHp < nextStats.hp) {
+      nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + nextStats.hpRegen * (dt / 1000))
+    }
+    const rng = mulberry32(hashSeed(`${player.id}:${player.xp}:${combat.monster.hp}:${Date.now()}`))
+
+    if (nextCombat.playerSwing >= PLAYER_SWING_MS) {
+      nextCombat.playerSwing = 0
+      const hit = strikeDamage(
+        nextStats.attack,
+        nextCombat.monster.def.defense,
+        nextStats.critChance,
+        nextStats.critMulti,
+        rng,
+      )
+      const hp = Math.max(0, nextCombat.monster.hp - hit.damage)
+      nextCombat = {
+        ...nextCombat,
+        monster: { ...nextCombat.monster, hp },
+        floats: pushFloat(nextCombat.floats, `${hit.damage}${hit.crit ? '!' : ''}`, hit.crit ? 'crit' : 'player'),
+      }
+      const steal =
+        nextStats.lifeSteal > 0 && nextCombat.playerHp > 0
+          ? Math.max(1, Math.round(hit.damage * nextStats.lifeSteal))
+          : 0
+      if (steal > 0) {
+        nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + steal)
+        nextCombat.floats = pushFloat(nextCombat.floats, `+${steal}`, 'heal')
+      }
+      if (hp <= 0) {
+        const result = applyKill(nextPlayer, nextItems, nextCombat.monster, nextStats, rng)
+        nextPlayer = result.player
+        nextItems = result.items
+        nextStats = deriveStats(nextPlayer, nextItems)
+        dirty = true
+        const loot = result.reward.item ? ` Loot: ${result.reward.item.name}.` : ''
+        const scrap = result.reward.scrap ? ` +${result.reward.scrap} scrap.` : ''
+        nextMonsterIndex = queuedMonsterIndex
+        nextCombat = rebuildCombat(nextPlayer, nextStats, nextMonsterIndex, nextCombat)
+        nextCombat.log = pushLog(
+          combat.log,
+          `Defeated ${combat.monster.def.name}. +${result.reward.xp} XP, +${result.reward.gold} gold.${scrap}${loot}`,
+        )
+        if (result.reward.leveled) {
+          nextCombat.log = pushLog(nextCombat.log, `Reached level ${result.reward.newLevel}.`)
+        }
+      }
+    }
+
+    if (nextCombat.monster.hp > 0 && nextCombat.monsterSwing >= MONSTER_SWING_MS) {
+      nextCombat.monsterSwing = 0
+      if (rng() < nextStats.block) {
+        nextCombat = {
+          ...nextCombat,
+          floats: pushFloat(nextCombat.floats, 'BLOCK', 'block'),
+          log: pushLog(nextCombat.log, `Blocked ${nextCombat.monster.def.name}.`),
+        }
+      } else {
+        const hit = strikeDamage(nextCombat.monster.def.attack, nextStats.defense, 0.05, 1.4, rng)
+        const hp = Math.max(0, nextCombat.playerHp - hit.damage)
+        nextCombat = {
+          ...nextCombat,
+          playerHp: hp,
+          floats: pushFloat(nextCombat.floats, `${hit.damage}`, 'monster'),
+        }
+        if (hp <= 0) {
+          nextMonsterIndex = queuedMonsterIndex
+          const downedRealm = getRealm(nextPlayer.realmId)
+          nextCombat = {
+            ...nextCombat,
+            playerHp: 0,
+            deathCooldownMs: DEATH_COOLDOWN_MS,
+            playerSwing: 0,
+            monsterSwing: 0,
+            monster: spawnMonster(pickMonster(downedRealm, nextMonsterIndex)),
+            log: pushLog(nextCombat.log, 'You fall. The hunt waits while you recover.'),
+          }
+        }
+      }
+    }
+
+    set({
+      player: nextPlayer,
+      items: nextItems,
+      stats: nextStats,
+      combat: nextCombat,
+      monsterIndex: nextMonsterIndex,
+      dirty: get().dirty || dirty,
+    })
+  },
+
+  equip: (itemId, slot) => {
+    const { items, player, combat } = get()
+    if (!player) return
+    const nextItems = applyEquip(items, itemId, slot)
+    const stats = deriveStats(player, nextItems)
+    set({
+      items: nextItems,
+      stats,
+      dirty: true,
+      combat: combat ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) } : combat,
+    })
+  },
+
+  unequip: (itemId) => {
+    const { items, player, combat } = get()
+    if (!player) return
+    const nextItems = applyUnequip(items, itemId)
+    const stats = deriveStats(player, nextItems)
+    set({
+      items: nextItems,
+      stats,
+      dirty: true,
+      combat: combat ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) } : combat,
+    })
+  },
+
+  queueNode: (nodeId) => {
+    const { player, pendingNodeIds, pendingRemovalNodeIds } = get()
+    if (!player) return
+    if (player.allocatedNodeIds.includes(nodeId)) {
+      if (pendingNodeIds.length > 0) {
+        set({ error: 'Confirm or discard pending allocations before refunding nodes.' })
+        return
+      }
+      if (nodeId === START_NODE_ID) {
+        set({ error: 'The starting node cannot be refunded.' })
+        return
+      }
+      const removing = pendingRemovalNodeIds.includes(nodeId)
+        ? pendingRemovalNodeIds.filter((id) => id !== nodeId)
+        : [...pendingRemovalNodeIds, nodeId]
+      if (!allocationRemainsConnected(player.allocatedNodeIds, removing)) {
+        set({ error: removing.includes(nodeId) ? 'Unassign outer nodes first.' : 'Restore inner nodes first.' })
+        return
+      }
+      set({ pendingRemovalNodeIds: removing, error: null })
+      return
+    }
+    if (pendingRemovalNodeIds.length > 0) {
+      set({ error: 'Confirm or discard pending refunds before allocating nodes.' })
+      return
+    }
+    if (pendingNodeIds.includes(nodeId)) {
+      set({ pendingNodeIds: prunePending(player.allocatedNodeIds, pendingNodeIds, nodeId), error: null })
+      return
+    }
+    const check = canAllocateNode(nodeId, player.allocatedNodeIds, player.skillPointsUnspent, pendingNodeIds)
+    if (!check.ok) {
+      set({ error: check.reason })
+      return
+    }
+    set({ pendingNodeIds: [...pendingNodeIds, nodeId], error: null })
+  },
+
+  confirmNodes: () => {
+    const { player, items, pendingNodeIds, pendingRemovalNodeIds, combat } = get()
+    if (!player || (pendingNodeIds.length === 0 && pendingRemovalNodeIds.length === 0)) return
+    if (pendingRemovalNodeIds.length > 0) {
+      const goldCost = pendingRemovalNodeIds.length * player.level * 2
+      if (player.gold < goldCost) {
+        set({ error: `Unassigning these nodes costs ${goldCost.toLocaleString()} gold.` })
+        return
+      }
+      const removed = new Set(pendingRemovalNodeIds)
+      const nextPlayer = {
+        ...player,
+        gold: player.gold - goldCost,
+        skillPointsUnspent: player.skillPointsUnspent + pendingRemovalNodeIds.length,
+        allocatedNodeIds: player.allocatedNodeIds.filter((id) => !removed.has(id)),
+      }
+      const stats = deriveStats(nextPlayer, items)
+      set({
+        player: nextPlayer,
+        stats,
+        pendingRemovalNodeIds: [],
+        dirty: true,
+        error: null,
+        combat: combat
+          ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) }
+          : combat,
+      })
+      return
+    }
+    if (pendingNodeIds.length > player.skillPointsUnspent) {
+      set({ error: 'Not enough skill points.' })
+      return
+    }
+    const nextPlayer = {
+      ...player,
+      skillPointsUnspent: player.skillPointsUnspent - pendingNodeIds.length,
+      allocatedNodeIds: [...player.allocatedNodeIds, ...pendingNodeIds],
+    }
+    const stats = deriveStats(nextPlayer, items)
+    set({
+      player: nextPlayer,
+      stats,
+      pendingNodeIds: [],
+      pendingRemovalNodeIds: [],
+      dirty: true,
+      error: null,
+      combat: combat
+        ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) }
+        : combat,
+    })
+  },
+
+  discardNodes: () => {
+    set({ pendingNodeIds: [], pendingRemovalNodeIds: [], error: null })
+  },
+
+  openRealmPicker: () => set({ realmPickerOpen: true }),
+  closeRealmPicker: () => set({ realmPickerOpen: false }),
+
+  selectRealm: (realmId) => {
+    const { player, items, combat } = get()
+    if (!player) return
+    if (realmId > player.highestRealmId) return
+    if (realmId === player.realmId) {
+      set({ realmPickerOpen: false })
+      return
+    }
+    let realmProgress = player.realmProgress
+    if (realmId === player.highestRealmId && player.realmId !== realmId && player.realmProgress >= REALM_PROGRESS_CAP) {
+      realmProgress = 0
+    }
+    const nextPlayer = { ...player, realmId, realmProgress }
+    const stats = deriveStats(nextPlayer, items)
+    set({
+      player: nextPlayer,
+      stats,
+      monsterIndex: 0,
+      queuedMonsterIndex: 0,
+      realmPickerOpen: false,
+      combat: rebuildCombat(nextPlayer, stats, 0, combat),
+      dirty: true,
+    })
+  },
+
+  persistNow: async () => {
+    const { player, items } = get()
+    if (!player) return
+    const stamped = { ...player, lastSettledAt: Date.now() }
+    await persistSave(stamped, items)
+    set({ player: stamped, dirty: false })
+  },
+}))

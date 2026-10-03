@@ -1,0 +1,49 @@
+@import 'tailwindcss';
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  height: 100%;
+}
+
+@keyframes monster-hit {
+  0% {
+    filter: brightness(2.35) saturate(1.25);
+    transform: scale(1.07);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+    transform: scale(1);
+  }
+}
+
+.monster-hit-flash {
+  animation: monster-hit 200ms ease-out;
+}
+
+@keyframes hit-number-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.92);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px) scale(1);
+  }
+}
+
+.hit-number {
+  animation: hit-number-in 480ms ease-out forwards;
+}

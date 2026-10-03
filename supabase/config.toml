@@ -1,0 +1,4 @@
+project_id = "your-project-ref"
+
+[functions.settle-offline]
+verify_jwt = true
