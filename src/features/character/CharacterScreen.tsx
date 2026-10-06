@@ -1,21 +1,19 @@
 import { STAT_HELP, STAT_LABELS, formatStat, type EquipSlot } from '../../game'
 import { canEquip, equippedInSlot, mainIsTwoHanded } from '../../game'
+import { RARITY_CLASS } from '../../game/rarity'
+import type { Item } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import { ItemCard, slotLabel } from '../items/ItemCard'
+import { SLOT_ICON, slotIconForEquip } from '../items/slotIcons'
+import { Modal } from '../ui/Modal'
 import { useEffect, useRef, useState } from 'react'
 import type { StatKey } from '../../game/types'
 
-const layout: EquipSlot[] = [
-  'helmet',
-  'amulet',
-  'weapon_main',
-  'weapon_offhand',
-  'armour',
-  'gloves',
-  'belt',
-  'boots',
-  'ring_1',
-  'ring_2',
+const rows: (EquipSlot | null)[][] = [
+  [null, 'helmet', 'amulet'],
+  ['weapon_main', 'armour', 'weapon_offhand'],
+  ['ring_1', 'belt', 'ring_2'],
+  [null, 'gloves', 'boots'],
 ]
 
 export function CharacterScreen() {
@@ -43,43 +41,32 @@ export function CharacterScreen() {
 
   return (
     <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-2">
-        {layout.map((slot) => {
-          const filled = equippedInSlot(items, slot)
-          const blocked = slot === 'weapon_offhand' && twoHand
-          return (
-            <button
-              key={slot}
-              type="button"
-              disabled={blocked}
-              aria-disabled={blocked}
-              onClick={() => {
-                if (selected && !blocked) {
-                  const check = canEquip(items, selected, slot)
-                  if (check.ok) equip(selected.id, slot)
-                } else if (filled) {
-                  selectItem(filled.id)
-                }
-              }}
-              className={`min-h-[4.5rem] rounded-xl border p-2 text-left text-xs ${
-                blocked
-                  ? 'cursor-not-allowed border-red-900/80 bg-red-950/40 text-red-400/80'
-                  : filled
-                    ? 'border-amber-800 bg-stone-900'
-                    : 'border-dashed border-stone-700 bg-stone-950 text-stone-500'
-              }`}
-            >
-              <p className="uppercase tracking-wide text-stone-500">{slotLabel(slot)}</p>
-              {blocked ? (
-                <p className="mt-1 font-medium text-red-400">Disabled — 2H occupies both hands</p>
-              ) : filled ? (
-                <p className="text-amber-100">{filled.name}</p>
-              ) : (
-                <p>Empty</p>
-              )}
-            </button>
-          )
-        })}
+      <div className="mx-auto grid w-full max-w-[18rem] grid-cols-3 gap-2">
+        {rows.flatMap((row, rowIndex) =>
+          row.map((slot, colIndex) =>
+            slot ? (
+              <EquipSlotTile
+                key={slot}
+                slot={slot}
+                filled={equippedInSlot(items, slot)}
+                blocked={slot === 'weapon_offhand' && twoHand}
+                selected={selectedItemId === equippedInSlot(items, slot)?.id}
+                onSelect={() => {
+                  const fromBag = selected && !selected.equippedSlot ? selected : null
+                  if (fromBag && !(slot === 'weapon_offhand' && twoHand) && canEquip(items, fromBag, slot).ok) {
+                    equip(fromBag.id, slot)
+                    selectItem(null)
+                    return
+                  }
+                  const filled = equippedInSlot(items, slot)
+                  if (filled) selectItem(filled.id === selectedItemId ? null : filled.id)
+                }}
+              />
+            ) : (
+              <div key={`pad-${rowIndex}-${colIndex}`} />
+            ),
+          ),
+        )}
       </div>
       <section className="rounded-2xl border border-stone-800 bg-stone-900 p-3">
         <h2 className="font-serif text-xl text-amber-100">Attributes</h2>
@@ -93,7 +80,7 @@ export function CharacterScreen() {
               <div
                 key={key}
                 ref={open ? helpBoxRef : undefined}
-                className="relative flex h-14 items-center gap-2 rounded-lg bg-stone-950 px-2.5"
+                className="relative flex h-14 items-center gap-2 overflow-hidden rounded-lg bg-stone-950 px-2.5"
               >
                 <div className="min-w-0 flex-1">
                   <dt className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
@@ -105,7 +92,7 @@ export function CharacterScreen() {
                   type="button"
                   aria-label={`${STAT_LABELS[key]} info`}
                   aria-expanded={open}
-                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                  className={`relative z-20 flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
                     open ? 'bg-amber-800 text-amber-100' : 'bg-stone-800 text-stone-300 hover:bg-stone-700'
                   }`}
                   onClick={() => setHelpStat((current) => (current === key ? null : key))}
@@ -113,7 +100,7 @@ export function CharacterScreen() {
                   <HelpGlyph />
                 </button>
                 {open && (
-                  <p className="absolute left-0 right-0 top-[calc(100%+4px)] z-10 rounded-lg border border-amber-900/70 bg-stone-900 px-2.5 py-2 text-[11px] leading-snug text-amber-50 shadow-lg">
+                  <p className="absolute inset-0 z-10 flex items-center bg-stone-900/95 px-2.5 py-1.5 pr-9 text-[11px] leading-snug text-amber-50">
                     {STAT_HELP[key]}
                   </p>
                 )}
@@ -122,24 +109,64 @@ export function CharacterScreen() {
           })}
         </dl>
       </section>
-      {selected && (
-        <div>
+      {selected?.equippedSlot && (
+        <Modal title={selected.name} onClose={() => selectItem(null)}>
           <ItemCard item={selected} />
-          {selected.equippedSlot && (
+          <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              className="mt-2 rounded-lg border border-stone-700 px-3 py-1 text-sm"
-              onClick={() => unequip(selected.id)}
+              className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm"
+              onClick={() => {
+                unequip(selected.id)
+                selectItem(null)
+              }}
             >
               Unequip
             </button>
-          )}
-        </div>
+          </div>
+        </Modal>
       )}
-      <p className="text-xs text-stone-500">
-        Select an inventory item, then tap a slot to equip. Two-handed weapons disable the offhand.
-      </p>
     </div>
+  )
+}
+
+function EquipSlotTile({
+  slot,
+  filled,
+  blocked,
+  selected,
+  onSelect,
+}: {
+  slot: EquipSlot
+  filled: Item | undefined
+  blocked: boolean
+  selected: boolean
+  onSelect: () => void
+}) {
+  const icon = filled ? SLOT_ICON[filled.slotType] : slotIconForEquip(slot)
+  return (
+    <button
+      type="button"
+      disabled={blocked}
+      aria-label={filled ? filled.name : slotLabel(slot)}
+      aria-disabled={blocked}
+      onClick={onSelect}
+      className={`relative flex aspect-square items-center justify-center rounded-xl border-2 bg-stone-950 p-2 ${
+        blocked
+          ? 'cursor-not-allowed border-red-900/70 opacity-35'
+          : filled
+            ? `${RARITY_CLASS[filled.rarity]} ${selected ? 'ring-2 ring-white/70' : ''}`
+            : 'border-dashed border-stone-700'
+      }`}
+    >
+      <img
+        src={icon}
+        alt=""
+        className={`h-full w-full object-contain ${filled && !blocked ? '' : 'opacity-25'}`}
+      />
+      {!filled && !blocked ? <span className="sr-only">{slotLabel(slot)}</span> : null}
+      {blocked ? <span className="sr-only">Occupied by two-handed weapon</span> : null}
+    </button>
   )
 }
 

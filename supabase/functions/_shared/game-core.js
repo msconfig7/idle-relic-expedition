@@ -41,7 +41,7 @@ var realms = [
 				id: "lost-shade",
 				name: "Lost Shade",
 				image: "/monsters/lost-shade.png",
-				hp: 140,
+				hp: 190,
 				attack: 22,
 				defense: 7,
 				xp: 30,
@@ -83,7 +83,7 @@ var realms = [
 				hp: 320,
 				attack: 32,
 				defense: 18,
-				xp: 14,
+				xp: 60,
 				gold: 9,
 				progress: 48,
 				itemDrop: .016,
@@ -96,7 +96,7 @@ var realms = [
 				hp: 380,
 				attack: 40,
 				defense: 16,
-				xp: 17,
+				xp: 80,
 				gold: 11,
 				progress: 54,
 				itemDrop: .018,
@@ -109,7 +109,7 @@ var realms = [
 				hp: 480,
 				attack: 36,
 				defense: 28,
-				xp: 20,
+				xp: 100,
 				gold: 13,
 				progress: 60,
 				itemDrop: .02,
@@ -119,10 +119,10 @@ var realms = [
 				id: "vault-wraith",
 				name: "Vault Wraith",
 				image: "/monsters/vault-wraith.png",
-				hp: 430,
+				hp: 600,
 				attack: 48,
 				defense: 18,
-				xp: 24,
+				xp: 140,
 				gold: 12,
 				progress: 68,
 				itemDrop: .022,
@@ -148,7 +148,7 @@ var realms = [
 				hp: 620,
 				attack: 52,
 				defense: 26,
-				xp: 28,
+				xp: 200,
 				gold: 18,
 				progress: 42,
 				itemDrop: .02,
@@ -161,7 +161,7 @@ var realms = [
 				hp: 780,
 				attack: 48,
 				defense: 42,
-				xp: 32,
+				xp: 400,
 				gold: 20,
 				progress: 48,
 				itemDrop: .022,
@@ -174,7 +174,7 @@ var realms = [
 				hp: 720,
 				attack: 62,
 				defense: 30,
-				xp: 36,
+				xp: 600,
 				gold: 24,
 				progress: 54,
 				itemDrop: .024,
@@ -187,7 +187,7 @@ var realms = [
 				hp: 980,
 				attack: 72,
 				defense: 38,
-				xp: 45,
+				xp: 1e3,
 				gold: 30,
 				progress: 64,
 				itemDrop: .028,
@@ -259,8 +259,15 @@ function getRealm(realmId) {
 function nextRealm(realmId) {
 	return realms.find((realm) => realm.id === realmId + 1);
 }
+function huntIndex(realm, index) {
+	const count = realm.monsters.length;
+	if (!count) return 0;
+	const value = Math.floor(index ?? 0);
+	if (!Number.isFinite(value) || value < 0) return 0;
+	return value % count;
+}
 function pickMonster(realm, killIndex) {
-	return realm.monsters[killIndex % realm.monsters.length];
+	return realm.monsters[huntIndex(realm, killIndex)];
 }
 function averageTimeToKillMs(playerAttack, playerCritChance, playerCritMulti, monsterHp, monsterDef, swingMs) {
 	const expected = Math.max(1, playerAttack - monsterDef * .4) * (1 - playerCritChance + playerCritChance * playerCritMulti);
@@ -536,6 +543,16 @@ var RARITY_LABEL = {
 	legendary: "Legendary"
 };
 //#endregion
+//#region src/lib/id.ts
+function newId() {
+	const bytes = /* @__PURE__ */ new Uint8Array(16);
+	crypto.getRandomValues(bytes);
+	bytes[6] = bytes[6] & 15 | 64;
+	bytes[8] = bytes[8] & 63 | 128;
+	const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+	return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+//#endregion
 //#region src/game/drops.ts
 var affixCount = {
 	common: 1,
@@ -721,7 +738,7 @@ function rollItemDrop(rng, playerId, realmId, itemChance) {
 	for (let i = 0; i < extra; i++) affixes.push(rollAffix(rng, rarity, realmId, used));
 	const prefix = rarity === "common" ? "" : `${RARITY_LABEL[rarity]} `;
 	return {
-		id: crypto.randomUUID(),
+		id: newId(),
 		playerId,
 		slotType: base.slotType,
 		weaponHand: base.weaponHand,
@@ -770,8 +787,8 @@ function grantXp(xp, level, unspent, amount) {
 function applyKill(player, items, monster, stats, rng) {
 	const xpGain = Math.max(1, Math.floor(monster.def.xp * stats.xpMod));
 	const goldGain = Math.max(1, Math.floor(monster.def.gold * stats.goldMod));
-	const scrap = rollScrap(rng, Math.min(.6, monster.def.materialDrop * stats.materialDrop / .18), player.realmId);
-	const itemChance = Math.min(.12, monster.def.itemDrop * (stats.itemDrop / .08) * .45);
+	const scrap = rollScrap(rng, monster.def.materialDrop * (stats.materialDrop / .18), player.realmId);
+	const itemChance = monster.def.itemDrop * (stats.itemDrop / .08);
 	const item = items.filter((entry) => !entry.equippedSlot).length >= 30 ? null : rollItemDrop(rng, player.id, player.realmId, itemChance);
 	const leveled = grantXp(player.xp, player.level, player.skillPointsUnspent, xpGain);
 	const nextItems = item ? [...items, item] : items;
@@ -1435,9 +1452,8 @@ function settleOffline(player, items, nowMs) {
 	let gold = 0;
 	let scrap = 0;
 	let drops = 0;
-	let killIndex = 0;
 	for (let i = 0; i < kills; i++) {
-		const def = pickMonster(getRealm(nextPlayer.realmId), killIndex++);
+		const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex);
 		const result = applyKill(nextPlayer, nextItems, {
 			def,
 			hp: 0,
@@ -6657,6 +6673,8 @@ var playerSchema = object({
 	realmId: number().int().positive(),
 	highestRealmId: number().int().positive().optional(),
 	realmProgress: number().int().min(0).max(1e4),
+	monsterIndex: number().int().nonnegative().optional(),
+	queuedMonsterIndex: number().int().nonnegative().optional(),
 	skillPointsUnspent: number().int().nonnegative(),
 	allocatedNodeIds: array(number().int()),
 	lastSettledAt: number(),
@@ -6673,14 +6691,20 @@ function playerFromRow(row) {
 		realmId: row.realm_id,
 		highestRealmId: row.highest_realm_id ?? row.realm_id,
 		realmProgress: row.realm_progress,
+		monsterIndex: row.monster_index ?? 0,
+		queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
 		skillPointsUnspent: row.skill_points_unspent,
 		allocatedNodeIds: row.allocated_node_ids ?? [0],
 		lastSettledAt: new Date(row.last_settled_at).getTime(),
 		contentVersion: row.content_version
 	});
+	const realm = getRealm(parsed.realmId);
+	const monsterIndex = huntIndex(realm, parsed.monsterIndex);
 	return {
 		...parsed,
-		highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId)
+		highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId),
+		monsterIndex,
+		queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex)
 	};
 }
 function playerToRow(player) {
@@ -6694,6 +6718,8 @@ function playerToRow(player) {
 		realm_id: player.realmId,
 		highest_realm_id: player.highestRealmId,
 		realm_progress: player.realmProgress,
+		monster_index: player.monsterIndex,
+		queued_monster_index: player.queuedMonsterIndex,
 		skill_points_unspent: player.skillPointsUnspent,
 		allocated_node_ids: player.allocatedNodeIds,
 		last_settled_at: new Date(player.lastSettledAt).toISOString(),

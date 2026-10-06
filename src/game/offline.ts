@@ -45,10 +45,9 @@ export function settleOffline(
   let gold = 0
   let scrap = 0
   let drops = 0
-  let killIndex = 0
 
   for (let i = 0; i < kills; i++) {
-    const def = pickMonster(getRealm(nextPlayer.realmId), killIndex++)
+    const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex)
     const result = applyKill(nextPlayer, nextItems, { def, hp: 0, maxHp: def.hp }, deriveStats(nextPlayer, nextItems), rng)
     nextPlayer = result.player
     nextItems = result.items

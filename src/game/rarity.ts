@@ -16,6 +16,14 @@ export const RARITY_CLASS: Record<Rarity, string> = {
   legendary: 'border-[#8a5a2b] text-[#c4a574]',
 }
 
+export const RARITY_TEXT: Record<Rarity, string> = {
+  common: 'text-stone-400',
+  magic: 'text-blue-400',
+  rare: 'text-yellow-300',
+  epic: 'text-purple-400',
+  legendary: 'text-[#c4a574]',
+}
+
 export const RARITY_CHIP: Record<Rarity, string> = {
   common: 'bg-stone-800 text-stone-300 border-stone-500',
   magic: 'bg-blue-950 text-blue-400 border-blue-500',

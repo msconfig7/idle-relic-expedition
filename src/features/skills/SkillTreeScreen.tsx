@@ -1,8 +1,8 @@
 import { canAllocateNode, skillTree } from '../../content/skillTree'
 import { formatAffix } from '../../game/format'
 import { useGameStore } from '../../state/gameStore'
-import { TransformComponent, TransformWrapper } from 'react-zoom-pan-pinch'
-import { useMemo, useState } from 'react'
+import { TransformComponent, TransformWrapper, useTransformComponent } from 'react-zoom-pan-pinch'
+import { useEffect, useMemo, useState } from 'react'
 import type { NodeKind } from '../../game/types'
 
 const clusterStroke: Record<string, string> = {
@@ -17,6 +17,38 @@ const clusterPlate: Record<string, string> = {
   str: '#7f1d1d',
   dex: '#14532d',
   int: '#0c4a6e',
+}
+
+
+function SpaceBackdrop({ contentWidth, contentHeight }: { contentWidth: number; contentHeight: number }) {
+  const { state, instance } = useTransformComponent((ctx) => ctx)
+  const [frame, setFrame] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = instance.wrapperComponent
+    if (!el) return
+    const measure = () => setFrame({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const obs = new ResizeObserver(measure)
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [instance])
+  const scale = state.scale || 1
+  const imgW = Math.max(contentWidth, frame.w / scale)
+  const imgH = Math.max(contentHeight, frame.h / scale)
+  const left = state.positionX + ((contentWidth - imgW) * scale) / 2
+  const top = state.positionY + ((contentHeight - imgH) * scale) / 2
+  return (
+    <div
+      className="pointer-events-none absolute bg-cover bg-center"
+      style={{
+        left,
+        top,
+        width: imgW * scale,
+        height: imgH * scale,
+        backgroundImage: "url(/skill-path-bg.png?v=3)",
+      }}
+    />
+  )
 }
 
 function kindSize(kind: NodeKind) {
@@ -124,6 +156,7 @@ export function SkillTreeScreen() {
   const discardNodes = useGameStore((s) => s.discardNodes)
   const error = useGameStore((s) => s.error)
   const [hoverId, setHoverId] = useState<number | null>(null)
+  const [assignMode, setAssignMode] = useState(false)
   const allocated = useMemo(() => new Set(player.allocatedNodeIds), [player.allocatedNodeIds])
   const pending = useMemo(() => new Set(pendingNodeIds), [pendingNodeIds])
   const pendingRemoval = useMemo(() => new Set(pendingRemovalNodeIds), [pendingRemovalNodeIds])
@@ -142,28 +175,43 @@ export function SkillTreeScreen() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-2">
-      <div className="shrink-0">
-        <h2 className="font-serif text-xl text-amber-100">Relic Path</h2>
-        <p className="text-sm text-stone-400">
-          {effectiveAllocated} allocated · {remaining} unspent
-          {pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
-          {pendingRemovalNodeIds.length > 0 ? ` · ${refundCost.toLocaleString()} gold` : ''}
-        </p>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+      <div className="flex shrink-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="font-serif text-xl text-amber-100">Skill Path</h2>
+          <p className="text-sm text-stone-400">
+            {effectiveAllocated} allocated · {remaining} unspent
+            {pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
+            {pendingRemovalNodeIds.length > 0 ? ` · ${refundCost.toLocaleString()} gold` : ''}
+          </p>
+          {assignMode && <p className="text-xs text-amber-200/90">Tap a node to assign or refund.</p>}
+          {error && <p className="text-sm text-red-400">{error}</p>}
+        </div>
+        <button
+          type="button"
+          aria-pressed={assignMode}
+          className={`shrink-0 rounded-lg px-3 py-1.5 text-sm ${
+            assignMode ? 'bg-amber-500 font-medium text-stone-950' : 'border border-stone-600 text-stone-100'
+          }`}
+          onClick={() => setAssignMode((on) => !on)}
+        >
+          {assignMode ? 'Done' : 'Assign'}
+        </button>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-800 bg-[#070504] [overscroll-behavior:none] [touch-action:none]">
         <TransformWrapper
-          minScale={0.08}
-          maxScale={4}
+          minScale={0.16}
+          maxScale={1.35}
           fitOnInit="contain"
-          limitToBounds={false}
+          limitToBounds
+          centerZoomedOut
           smooth
           disablePadding
           doubleClick={{ disabled: true }}
           wheel={{ step: 0.00032 }}
           pinch={{ step: 4 }}
-          panning={{ velocityDisabled: true, excluded: ['skill-node'] }}
+          panning={{ velocityDisabled: true, excluded: assignMode ? ['skill-node'] : [] }}
         >
+          <SpaceBackdrop contentWidth={width} contentHeight={height} />
           <TransformComponent wrapperClass="!h-full !w-full" contentClass="!w-max !h-max">
             <svg width={width} height={height} className="cursor-grab">
               {skillTree.edges.map((edge) => {
@@ -205,9 +253,12 @@ export function SkillTreeScreen() {
                 return (
                   <g
                     key={node.id}
-                    className="skill-node cursor-pointer"
+                    className={`skill-node ${assignMode ? 'cursor-pointer' : ''}`}
                     onMouseEnter={() => setHoverId(node.id)}
-                    onClick={() => queueNode(node.id)}
+                    onClick={() => {
+                      setHoverId(node.id)
+                      if (assignMode) queueNode(node.id)
+                    }}
                   >
                     {showPlate && (
                       <Plate
@@ -267,7 +318,10 @@ export function SkillTreeScreen() {
             className={`rounded-lg py-2 text-sm font-medium text-amber-50 ${
               pendingRemovalNodeIds.length > 0 ? 'bg-red-800' : 'bg-amber-700'
             }`}
-            onClick={confirmNodes}
+            onClick={() => {
+              confirmNodes()
+              if (!useGameStore.getState().error) setAssignMode(false)
+            }}
           >
             {pendingRemovalNodeIds.length > 0
               ? `Unassign ${pendingRemovalNodeIds.length} · ${refundCost.toLocaleString()} gold`

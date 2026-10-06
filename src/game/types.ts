@@ -10,6 +10,7 @@ export const START_NODE_ID = 0
 export const PLAYER_SWING_MS = 800
 export const MONSTER_SWING_MS = 1_150
 export const DEATH_COOLDOWN_MS = 5_000
+export const DESPAWN_MS = 700
 export const MAX_INVENTORY = 30
 
 export const EQUIP_SLOTS = [
@@ -130,6 +131,8 @@ export type PlayerState = {
   realmId: number
   highestRealmId: number
   realmProgress: number
+  monsterIndex: number
+  queuedMonsterIndex: number
   skillPointsUnspent: number
   allocatedNodeIds: number[]
   lastSettledAt: number
@@ -195,6 +198,7 @@ export type LiveMonster = {
 export type CombatLogEntry = {
   id: number
   text: string
+  rarity?: Rarity
 }
 
 export type FloatingHit = {
@@ -210,6 +214,8 @@ export type CombatSnapshot = {
   playerSwing: number
   monsterSwing: number
   deathCooldownMs: number
+  despawnMs: number
+  encounter: number
   log: CombatLogEntry[]
   floats: FloatingHit[]
 }

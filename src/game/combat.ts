@@ -14,8 +14,16 @@ export function canAdvanceRealm(realmId: number, progress: number): boolean {
   return progress >= REALM_PROGRESS_CAP && Boolean(nextRealm(realmId))
 }
 
+export function huntIndex(realm: RealmDef, index: number | undefined): number {
+  const count = realm.monsters.length
+  if (!count) return 0
+  const value = Math.floor(index ?? 0)
+  if (!Number.isFinite(value) || value < 0) return 0
+  return value % count
+}
+
 export function pickMonster(realm: RealmDef, killIndex: number): MonsterDef {
-  return realm.monsters[killIndex % realm.monsters.length]
+  return realm.monsters[huntIndex(realm, killIndex)]
 }
 
 export function spawnMonster(def: MonsterDef): LiveMonster {

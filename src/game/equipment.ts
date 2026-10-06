@@ -55,7 +55,7 @@ export function canEquip(items: Item[], item: Item, slot: EquipSlot): { ok: true
 
 export function applyEquip(items: Item[], itemId: string, slot: EquipSlot): Item[] {
   const item = items.find((entry) => entry.id === itemId)
-  if (!item) return items
+  if (!item || item.equippedSlot) return items
   const check = canEquip(items, item, slot)
   if (!check.ok) return items
 

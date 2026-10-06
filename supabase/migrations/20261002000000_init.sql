@@ -37,6 +37,8 @@ create table public.players (
   scrap bigint not null default 0 check (scrap >= 0),
   realm_id integer not null default 1,
   realm_progress integer not null default 0 check (realm_progress >= 0 and realm_progress <= 10000),
+  monster_index integer not null default 0 check (monster_index >= 0),
+  queued_monster_index integer not null default 0 check (queued_monster_index >= 0),
   skill_points_unspent integer not null default 3 check (skill_points_unspent >= 0),
   allocated_node_ids integer[] not null default array[0],
   last_settled_at timestamptz not null default now(),

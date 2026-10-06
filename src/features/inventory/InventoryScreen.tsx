@@ -1,34 +1,29 @@
 import { slotsForType } from '../../game/equipment'
-import { RARITY_CHIP, RARITY_LABEL } from '../../game/rarity'
+import { salvageScrap } from '../../game/salvage'
+import { RARITY_CHIP, RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
 import { MAX_INVENTORY, RARITIES, SLOT_TYPES, type Rarity, type SlotType } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
-import { ItemCard } from '../items/ItemCard'
+import { ItemCard, slotLabel } from '../items/ItemCard'
+import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
 import { useMemo, useState } from 'react'
-
-const TYPE_LABEL: Record<SlotType, string> = {
-  helmet: 'Helmet',
-  amulet: 'Amulet',
-  weapon: 'Weapon',
-  armour: 'Armour',
-  belt: 'Belt',
-  ring: 'Ring',
-  gloves: 'Gloves',
-  boots: 'Boots',
-}
 
 export function InventoryScreen() {
   const items = useGameStore((s) => s.items)
   const selectedItemId = useGameStore((s) => s.selectedItemId)
   const selectItem = useGameStore((s) => s.selectItem)
   const equip = useGameStore((s) => s.equip)
-  const setScreen = useGameStore((s) => s.setScreen)
+  const salvage = useGameStore((s) => s.salvage)
+  const unseenItemIds = useGameStore((s) => s.unseenItemIds)
+  const unseen = useMemo(() => new Set(unseenItemIds), [unseenItemIds])
   const selected = items.find((item) => item.id === selectedItemId && !item.equippedSlot)
   const [filterOpen, setFilterOpen] = useState(false)
   const [types, setTypes] = useState<SlotType[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
   const [draftTypes, setDraftTypes] = useState<SlotType[]>([])
   const [draftRarities, setDraftRarities] = useState<Rarity[]>([])
+  const [salvageOpen, setSalvageOpen] = useState(false)
+  const [salvageRarities, setSalvageRarities] = useState<Rarity[]>([])
 
   const unequipped = useMemo(() => items.filter((item) => !item.equippedSlot), [items])
   const bag = useMemo(() => {
@@ -41,6 +36,11 @@ export function InventoryScreen() {
   }, [unequipped, types, rarities])
 
   const activeFilters = types.length + rarities.length
+  const salvageTargets = useMemo(
+    () => unequipped.filter((item) => !item.locked && salvageRarities.includes(item.rarity)),
+    [unequipped, salvageRarities],
+  )
+  const salvageTotal = salvageTargets.reduce((sum, item) => sum + salvageScrap(item), 0)
 
   return (
     <div>
@@ -51,6 +51,18 @@ export function InventoryScreen() {
             {unequipped.length}/{MAX_INVENTORY} in bag
           </p>
         </div>
+        <div className="flex gap-2">
+        <button
+          type="button"
+          className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm disabled:opacity-40"
+          disabled={unequipped.length === 0}
+          onClick={() => {
+            setSalvageRarities([])
+            setSalvageOpen(true)
+          }}
+        >
+          Salvage
+        </button>
         <button
           type="button"
           className="relative rounded-lg border border-stone-600 px-3 py-1.5 text-sm"
@@ -65,6 +77,7 @@ export function InventoryScreen() {
             <span className="ml-1 rounded-full bg-amber-500 px-1.5 text-[10px] text-stone-950">{activeFilters}</span>
           )}
         </button>
+        </div>
       </div>
       {bag.length === 0 ? (
         <p className="rounded-2xl border border-dashed border-stone-700 p-8 text-stone-500">
@@ -73,33 +86,106 @@ export function InventoryScreen() {
             : 'No equipment matches these filters.'}
         </p>
       ) : (
-        <div className="grid gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {bag.map((item) => (
-            <ItemCard
+            <button
               key={item.id}
-              item={item}
-              selected={item.id === selectedItemId}
-              onSelect={() => selectItem(item.id)}
-            />
+              type="button"
+              onClick={() => selectItem(item.id)}
+              className={`relative flex flex-col items-center rounded-xl border-2 bg-stone-950 px-1 py-1.5 text-center ${RARITY_CLASS[item.rarity]} ${
+                item.id === selectedItemId ? 'ring-2 ring-white/70' : ''
+              }`}
+            >
+              {unseen.has(item.id) ? (
+                <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1.5 text-[9px] font-semibold leading-4 text-stone-950">
+                  New
+                </span>
+              ) : null}
+              <img src={SLOT_ICON[item.slotType]} alt="" className="h-14 w-full object-contain" />
+              <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-stone-100">{item.name}</span>
+              <span className="text-[9px] uppercase tracking-wide">{TYPE_LABEL[item.slotType]}</span>
+            </button>
           ))}
         </div>
       )}
       {selected && (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {slotsForType(selected.slotType).map((slot) => (
+        <Modal title={selected.name} onClose={() => selectItem(null)}>
+          <ItemCard item={selected} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            {slotsForType(selected.slotType).map((slot) => (
+              <button
+                key={slot}
+                type="button"
+                className="rounded-lg bg-amber-800 px-3 py-1.5 text-sm"
+                onClick={() => {
+                  equip(selected.id, slot)
+                  selectItem(null)
+                }}
+              >
+                Equip {slotLabel(slot)}
+              </button>
+            ))}
             <button
-              key={slot}
               type="button"
-              className="rounded-lg bg-amber-800 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-red-900/80 px-3 py-1.5 text-sm text-red-300"
               onClick={() => {
-                equip(selected.id, slot)
-                setScreen('character')
+                salvage([selected.id])
+                selectItem(null)
               }}
             >
-              Equip {slot.replace('_', ' ')}
+              Salvage · +{salvageScrap(selected)} scrap
             </button>
-          ))}
-        </div>
+          </div>
+        </Modal>
+      )}
+      {salvageOpen && (
+        <Modal
+          title="Mass salvage"
+          onClose={() => setSalvageOpen(false)}
+          footer={
+            <button
+              type="button"
+              disabled={salvageTargets.length === 0}
+              className="w-full rounded-lg bg-red-900 py-2 text-sm text-red-50 disabled:opacity-40"
+              onClick={() => {
+                salvage(salvageTargets.map((item) => item.id))
+                setSalvageOpen(false)
+              }}
+            >
+              {salvageTargets.length === 0
+                ? 'Nothing to salvage'
+                : `Salvage ${salvageTargets.length} · +${salvageTotal.toLocaleString()} scrap`}
+            </button>
+          }
+        >
+          <p className="text-xs text-stone-500">
+            Break spare gear into scrap. Equipped items stay on your hero. Select rarities to include.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {RARITIES.map((rarity) => {
+              const on = salvageRarities.includes(rarity)
+              return (
+                <button
+                  key={rarity}
+                  type="button"
+                  className={`rounded-full border px-2.5 py-1 text-xs ${RARITY_CHIP[rarity]} ${
+                    on ? 'ring-2 ring-white/70' : 'opacity-50'
+                  }`}
+                  onClick={() =>
+                    setSalvageRarities((current) =>
+                      on ? current.filter((entry) => entry !== rarity) : [...current, rarity],
+                    )
+                  }
+                >
+                  {RARITY_LABEL[rarity]}
+                </button>
+              )
+            })}
+          </div>
+          <p className="mt-3 text-sm text-stone-300">
+            {salvageTargets.length} item{salvageTargets.length === 1 ? '' : 's'} · +{salvageTotal.toLocaleString()} scrap
+          </p>
+        </Modal>
       )}
       {filterOpen && (
         <Modal

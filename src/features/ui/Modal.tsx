@@ -12,8 +12,14 @@ export function Modal({
   footer?: ReactNode
 }) {
   return (
-    <div className="absolute inset-0 z-30 grid place-items-center bg-black/70 p-4">
-      <div className="relative flex max-h-[85svh] w-full max-w-[24rem] flex-col rounded-2xl border border-stone-700 bg-stone-900 p-4 pt-11">
+    <div
+      className="absolute inset-0 z-30 grid place-items-center bg-black/70 p-4"
+      onMouseDown={onClose}
+    >
+      <div
+        className="relative flex max-h-[85svh] w-full max-w-[24rem] flex-col rounded-2xl border border-stone-700 bg-stone-900 p-4 pt-11"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
         <button
           type="button"
           aria-label="Close"

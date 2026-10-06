@@ -1,10 +1,11 @@
-import { REALM_PROGRESS_CAP, xpIntoLevel, xpToNext } from '../../game'
-import { getRealm } from '../../game'
+import { getRealm, xpIntoLevel, xpToNext } from '../../game'
+import { MAX_INVENTORY } from '../../game/types'
+import { RARITY_TEXT } from '../../game/rarity'
 import { supabase } from '../../lib/supabase'
 import { useGameStore } from '../../state/gameStore'
 import { RealmSelectModal } from '../combat/RealmSelectModal'
 import { Modal } from '../ui/Modal'
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 
 const tabs = [
   { id: 'combat', label: 'Combat' },
@@ -16,6 +17,7 @@ const tabs = [
 export function Shell({ children }: { children: ReactNode }) {
   const player = useGameStore((s) => s.player)!
   const screen = useGameStore((s) => s.screen)
+  const recentLog = useGameStore((s) => s.combat?.log)?.slice(-3) ?? []
   const setScreen = useGameStore((s) => s.setScreen)
   const grant = useGameStore((s) => s.offlineGrant)
   const acknowledge = useGameStore((s) => s.acknowledgeOffline)
@@ -24,53 +26,76 @@ export function Shell({ children }: { children: ReactNode }) {
   const pendingCount = useGameStore((s) => s.pendingNodeIds.length)
   const pendingRemovalCount = useGameStore((s) => s.pendingRemovalNodeIds.length)
   const remainingPoints = player.skillPointsUnspent - pendingCount + pendingRemovalCount
+  const items = useGameStore((s) => s.items)
+  const unseenItemIds = useGameStore((s) => s.unseenItemIds)
+  const bagCount = items.filter((item) => !item.equippedSlot).length
+  const bagFull = bagCount >= MAX_INVENTORY
+  const newBagCount = unseenItemIds.length
   const realm = getRealm(player.realmId)
   const into = xpIntoLevel(player.xp, player.level)
   const need = xpToNext(player.level)
   const xpPct = Math.min(100, (into / need) * 100)
-  const realmPct =
-    player.realmId < player.highestRealmId
-      ? 100
-      : Math.min(100, (player.realmProgress / REALM_PROGRESS_CAP) * 100)
-  const realmLabel = player.realmId < player.highestRealmId ? 'Cleared' : `${Math.floor(realmPct)}%`
+  const [bursts, setBursts] = useState<{ id: number; level: number }[]>([])
+  const levelRef = useRef(player.level)
+
+  useEffect(() => {
+    if (player.level > levelRef.current) {
+      const id = levelBurstSeq++
+      setBursts((list) => [...list, { id, level: player.level }].slice(-3))
+    }
+    levelRef.current = player.level
+  }, [player.level])
 
   return (
     <div className="flex min-h-svh justify-center bg-black text-stone-100">
       <div className="relative flex h-svh w-full max-w-[430px] flex-col overflow-hidden bg-stone-950 shadow-[0_0_80px_rgba(0,0,0,0.65)]">
+        {bursts.map((burst) => (
+          <LevelBurst
+            key={burst.id}
+            level={burst.level}
+            onDone={() => setBursts((list) => list.filter((entry) => entry.id !== burst.id))}
+          />
+        ))}
         <header
-          className="shrink-0 border-b px-3 py-2"
+          className="shrink-0 border-b"
           style={{
             borderColor: `${realm.theme.accent}55`,
             background: `linear-gradient(180deg, ${realm.theme.from}, #1c1917)`,
           }}
         >
-          <div className="flex items-start gap-2">
-              <button type="button" className="min-w-0 flex-1 text-left" onClick={openRealmPicker}>
-                <p className="text-[10px] uppercase tracking-[0.25em] text-amber-600">Idle Relic Expedition</p>
-                <h1 className="truncate font-serif text-base text-amber-100">
-                  Lv {player.level} · {realm.name}
-                </h1>
+          <div className="px-3 py-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-stone-950"
+                onClick={openRealmPicker}
+              >
+                Lv. {player.level}
               </button>
-            <button
-              type="button"
-              className="shrink-0 pt-1 text-[11px] text-stone-500 underline"
-              onClick={() => {
-                localStorage.removeItem('idle-relic-expedition:guest')
-                void supabase?.auth.signOut()
-                window.location.reload()
-              }}
-            >
-              Sign out
-            </button>
-          </div>
-          <div className="mt-2 grid grid-cols-3 gap-1.5">
-            <Currency label="Gold" value={player.gold} color="text-amber-300" />
-            <Currency label="Diamonds" value={player.diamonds} color="text-cyan-300" />
-            <Currency label="Scrap" value={player.scrap} color="text-stone-300" />
-          </div>
-          <div className="mt-2 grid gap-2">
-            <Bar title="XP" label={`${into} / ${need}`} pct={xpPct} color="bg-emerald-600" />
-            <Bar title="Realm progress" label={realmLabel} pct={realmPct} color="bg-orange-600" />
+              <button type="button" className="min-w-0 flex-1 truncate text-left text-sm text-amber-100" onClick={openRealmPicker}>
+                {realm.name}
+              </button>
+              <button
+                type="button"
+                className="shrink-0 text-[11px] text-stone-500 underline"
+                onClick={() => {
+                  localStorage.removeItem('idle-relic-expedition:guest')
+                  void supabase?.auth.signOut()
+                  window.location.reload()
+                }}
+              >
+                Sign out
+              </button>
+            </div>
+            <div className="mt-1.5 flex items-center gap-3 text-xs tabular-nums">
+              <span className="text-amber-300" title="Gold">● {compact(player.gold)}</span>
+              <span className="text-cyan-300" title="Diamonds">◆ {compact(player.diamonds)}</span>
+              <span className="text-stone-300" title="Scrap">■ {compact(player.scrap)}</span>
+              <span className="ml-auto text-[11px] text-stone-500">XP {Math.floor(xpPct)}%</span>
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-stone-800">
+              <div className="h-full bg-emerald-600" style={{ width: `${xpPct}%` }} />
+            </div>
           </div>
         </header>
         <main
@@ -80,25 +105,55 @@ export function Shell({ children }: { children: ReactNode }) {
         >
           {children}
         </main>
+        {screen === 'combat' && (
+          <div className="shrink-0 overflow-hidden border-t border-stone-800 bg-stone-950 px-3 pb-4 pt-2">
+            <ul className="space-y-0.5 text-[11px] leading-4 text-stone-400">
+              {recentLog.map((entry) => (
+                <li
+                  key={entry.id}
+                  className={`truncate ${entry.rarity ? RARITY_TEXT[entry.rarity] : ''}`}
+                >
+                  {entry.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <nav className="grid shrink-0 grid-cols-4 border-t border-stone-800 bg-stone-900 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setScreen(tab.id)}
-              className={`relative flex flex-col items-center gap-0.5 px-1 py-1.5 text-xs ${
-                screen === tab.id ? 'text-amber-200' : 'text-stone-500'
-              }`}
-            >
-              <TabIcon id={tab.id} />
-              <span>{tab.label}</span>
-              {tab.id === 'skills' && remainingPoints > 0 ? (
-                <span className="absolute right-2 top-1 rounded-full bg-amber-400 px-1.5 text-[10px] text-stone-900">
-                  {remainingPoints}
+          {tabs.map((tab) => {
+            const pathBadge = tab.id === 'skills' && remainingPoints > 0
+            const bagBadge = tab.id === 'inventory' && (bagFull || newBagCount > 0)
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setScreen(tab.id)}
+                className={`relative flex flex-col items-center gap-0.5 px-1 py-1.5 text-xs ${
+                  screen === tab.id ? 'text-amber-200' : 'text-stone-500'
+                }`}
+              >
+                <span className="relative">
+                  <TabIcon id={tab.id} />
+                  {pathBadge ? (
+                    <span className="absolute -right-3 -top-1.5 min-w-[1.1rem] rounded-full bg-amber-400 px-1 text-center text-[10px] leading-4 text-stone-900">
+                      {remainingPoints}
+                    </span>
+                  ) : null}
+                  {bagBadge ? (
+                    <span
+                      className={`absolute -right-3 -top-1.5 flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] leading-4 ${
+                        bagFull ? 'bg-red-500 text-white' : 'bg-amber-400 text-stone-900'
+                      }`}
+                      title={bagFull ? 'Bag full' : `${newBagCount} new`}
+                    >
+                      {bagFull ? <BagFullGlyph /> : newBagCount}
+                    </span>
+                  ) : null}
                 </span>
-              ) : null}
-            </button>
-          ))}
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
         </nav>
         {grant && grant.kills > 0 && (
           <Modal title="While you were away" onClose={acknowledge}>
@@ -118,6 +173,70 @@ export function Shell({ children }: { children: ReactNode }) {
         {realmPickerOpen && <RealmSelectModal />}
       </div>
     </div>
+  )
+}
+
+const LEVEL_SPARKS = Array.from({ length: 18 }, (_, i) => {
+  const angle = (i / 18) * Math.PI * 2 + (i % 2) * 0.2
+  const dist = 48 + (i % 5) * 26
+  return {
+    dx: `${Math.cos(angle) * dist}px`,
+    dy: `${Math.sin(angle) * dist}px`,
+    delay: `${(i % 6) * 28}ms`,
+    size: i % 4 === 0 ? 8 : 4,
+    color: i % 3 === 0 ? '#fff7ed' : i % 3 === 1 ? '#fde68a' : '#f59e0b',
+  }
+})
+
+let levelBurstSeq = 1
+
+function LevelBurst({ level, onDone }: { level: number; onDone: () => void }) {
+  const onDoneRef = useRef(onDone)
+  onDoneRef.current = onDone
+  useEffect(() => {
+    const timer = window.setTimeout(() => onDoneRef.current(), 1200)
+    return () => window.clearTimeout(timer)
+  }, [])
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
+      <div className="level-glow absolute left-1/2 top-[42%] h-48 w-48" />
+      <div className="level-ring absolute left-1/2 top-[42%] h-28 w-28 rounded-full border border-amber-100/80" />
+      <div className="level-ring level-ring-late absolute left-1/2 top-[42%] h-20 w-20 rounded-full border border-amber-300/70" />
+      {LEVEL_SPARKS.map((spark, index) => (
+        <span
+          key={index}
+          className="level-spark absolute left-1/2 top-[42%] rounded-full"
+          style={{
+            width: spark.size,
+            height: spark.size,
+            background: spark.color,
+            boxShadow: `0 0 10px ${spark.color}`,
+            '--dx': spark.dx,
+            '--dy': spark.dy,
+            '--delay': spark.delay,
+          } as CSSProperties}
+        />
+      ))}
+      <p className="level-label absolute left-1/2 top-[42%] font-serif text-3xl tracking-wide text-amber-50">
+        Level {level}
+      </p>
+    </div>
+  )
+}
+
+function BagFullGlyph() {
+  return (
+    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true">
+      <path
+        d="M3.5 4.5V3.2a2.5 2.5 0 0 1 5 0v1.3M2.5 4.5h7l.6 6H1.9l.6-6Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinejoin="round"
+      />
+      <path d="M4 7.5h4M6 5.5v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
   )
 }
 
@@ -169,35 +288,10 @@ function TabIcon({ id }: { id: (typeof tabs)[number]['id'] }) {
   )
 }
 
-function Currency({ label, value, color }: { label: string; value: number; color: string }) {
-  return (
-    <div className="rounded-lg border border-stone-800 bg-stone-950 px-2 py-1">
-      <p className="text-[10px] uppercase tracking-wide text-stone-500">{label}</p>
-      <p className={`truncate text-sm font-medium ${color}`}>{value.toLocaleString()}</p>
-    </div>
-  )
+function compact(value: number): string {
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 10_000) return `${(value / 1_000).toFixed(1)}K`
+  return value.toLocaleString()
 }
 
-function Bar({
-  title,
-  label,
-  pct,
-  color,
-}: {
-  title: string
-  label: string
-  pct: number
-  color: string
-}) {
-  return (
-    <div>
-      <div className="mb-1 flex items-baseline justify-between gap-2">
-        <p className="text-[11px] uppercase tracking-wide text-stone-500">{title}</p>
-        <p className="truncate text-[11px] tabular-nums text-stone-400">{label}</p>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-stone-800">
-        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  )
-}

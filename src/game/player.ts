@@ -12,6 +12,8 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
     realmId: 1,
     highestRealmId: 1,
     realmProgress: 0,
+    monsterIndex: 0,
+    queuedMonsterIndex: 0,
     skillPointsUnspent: 3,
     allocatedNodeIds: [START_NODE_ID],
     lastSettledAt: now,

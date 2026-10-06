@@ -13,8 +13,8 @@ export function applyKill(
 ): { player: PlayerState; items: Item[]; reward: KillReward } {
   const xpGain = Math.max(1, Math.floor(monster.def.xp * stats.xpMod))
   const goldGain = Math.max(1, Math.floor(monster.def.gold * stats.goldMod))
-  const scrap = rollScrap(rng, Math.min(0.6, monster.def.materialDrop * stats.materialDrop / 0.18), player.realmId)
-  const itemChance = Math.min(0.12, monster.def.itemDrop * (stats.itemDrop / 0.08) * 0.45)
+  const scrap = rollScrap(rng, monster.def.materialDrop * (stats.materialDrop / 0.18), player.realmId)
+  const itemChance = monster.def.itemDrop * (stats.itemDrop / 0.08)
   const bagCount = items.filter((entry) => !entry.equippedSlot).length
   const item =
     bagCount >= MAX_INVENTORY ? null : rollItemDrop(rng, player.id, player.realmId, itemChance)

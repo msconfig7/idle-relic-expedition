@@ -13,6 +13,6 @@ export { applyEquip, applyUnequip, canEquip, equippedInSlot, mainIsTwoHanded } f
 export { settleOffline } from './offline'
 export { allocateNode } from './skills'
 export { applyKill } from './rewards'
-export { canAdvanceRealm, getRealm, nextRealm, pickMonster, spawnMonster, strikeDamage } from './combat'
+export { canAdvanceRealm, getRealm, huntIndex, nextRealm, pickMonster, spawnMonster, strikeDamage } from './combat'
 export { RARITY_LABEL, RARITY_CLASS, RARITY_CHIP, normalizeRarity } from './rarity'
 export { xpToNext, xpIntoLevel, totalXpForLevel, levelFromTotalXp } from './xp'

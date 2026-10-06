@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { Affix, EquipSlot, Item, PlayerState, Rarity, SlotType, WeaponHand } from '../game/types'
+import { getRealm, huntIndex } from '../game/combat'
 import { EQUIP_SLOTS, RARITIES, SLOT_TYPES, STAT_KEYS, WEAPON_HANDS } from '../game/types'
 
 export const affixSchema = z.object({
@@ -30,6 +31,8 @@ export const playerSchema = z.object({
   realmId: z.number().int().positive(),
   highestRealmId: z.number().int().positive().optional(),
   realmProgress: z.number().int().min(0).max(10_000),
+  monsterIndex: z.number().int().nonnegative().optional(),
+  queuedMonsterIndex: z.number().int().nonnegative().optional(),
   skillPointsUnspent: z.number().int().nonnegative(),
   allocatedNodeIds: z.array(z.number().int()),
   lastSettledAt: z.number(),
@@ -45,6 +48,8 @@ export type PlayerRow = {
   scrap: number
   realm_id: number
   realm_progress: number
+  monster_index?: number
+  queued_monster_index?: number
   skill_points_unspent: number
   allocated_node_ids: number[]
   highest_realm_id?: number
@@ -76,14 +81,20 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     realmId: row.realm_id,
     highestRealmId: row.highest_realm_id ?? row.realm_id,
     realmProgress: row.realm_progress,
+    monsterIndex: row.monster_index ?? 0,
+    queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
     skillPointsUnspent: row.skill_points_unspent,
     allocatedNodeIds: row.allocated_node_ids ?? [0],
     lastSettledAt: new Date(row.last_settled_at).getTime(),
     contentVersion: row.content_version,
   })
+  const realm = getRealm(parsed.realmId)
+  const monsterIndex = huntIndex(realm, parsed.monsterIndex)
   return {
     ...parsed,
     highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId),
+    monsterIndex,
+    queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
   }
 }
 
@@ -98,6 +109,8 @@ export function playerToRow(player: PlayerState): PlayerRow {
     realm_id: player.realmId,
     highest_realm_id: player.highestRealmId,
     realm_progress: player.realmProgress,
+    monster_index: player.monsterIndex,
+    queued_monster_index: player.queuedMonsterIndex,
     skill_points_unspent: player.skillPointsUnspent,
     allocated_node_ids: player.allocatedNodeIds,
     last_settled_at: new Date(player.lastSettledAt).toISOString(),

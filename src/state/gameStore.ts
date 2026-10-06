@@ -5,14 +5,16 @@ import {
   applyKill,
   deriveStats,
   getRealm,
+  huntIndex,
   levelFromTotalXp,
   nextRealm,
   pickMonster,
   spawnMonster,
   strikeDamage,
 } from '../game'
+import { salvageScrap } from '../game/salvage'
 import { REALM_PROGRESS_CAP, START_NODE_ID, TICK_MS } from '../game/types'
-import { DEATH_COOLDOWN_MS, PLAYER_SWING_MS, MONSTER_SWING_MS } from '../game/types'
+import { DEATH_COOLDOWN_MS, DESPAWN_MS, PLAYER_SWING_MS, MONSTER_SWING_MS } from '../game/types'
 import { mulberry32, hashSeed } from '../game/rng'
 import type {
   CombatLogEntry,
@@ -29,6 +31,29 @@ import { create } from 'zustand'
 
 type ScreenId = 'combat' | 'character' | 'inventory' | 'skills'
 
+const unseenKey = (playerId: string) => `idle-relic-expedition:unseen:${playerId}`
+
+function readUnseen(playerId: string): string[] {
+  try {
+    const raw = localStorage.getItem(unseenKey(playerId))
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeUnseen(playerId: string, ids: string[]): void {
+  localStorage.setItem(unseenKey(playerId), JSON.stringify(ids))
+}
+
+function mergeUnseen(playerId: string, current: string[], added: string[], validIds: Set<string>): string[] {
+  const next = [...new Set([...current, ...added])].filter((id) => validIds.has(id))
+  writeUnseen(playerId, next)
+  return next
+}
+
 type GameStore = {
   ready: boolean
   paused: boolean
@@ -41,18 +66,20 @@ type GameStore = {
   monsterIndex: number
   queuedMonsterIndex: number
   selectedItemId: string | null
+  unseenItemIds: string[]
   pendingNodeIds: number[]
   pendingRemovalNodeIds: number[]
   realmPickerOpen: boolean
   offlineGrant: OfflineGrant | null
   error: string | null
-  hydrate: (player: PlayerState, items: Item[]) => void
+  hydrate: (player: PlayerState, items: Item[], knownItemIds?: string[]) => void
   setScreen: (screen: ScreenId) => void
   selectItem: (id: string | null) => void
   queueMonster: (index: number) => void
   tick: (dt?: number) => void
   equip: (itemId: string, slot: EquipSlot) => void
   unequip: (itemId: string) => void
+  salvage: (itemIds: string[]) => void
   queueNode: (nodeId: number) => void
   confirmNodes: () => void
   discardNodes: () => void
@@ -68,8 +95,8 @@ type GameStore = {
 let logSeq = 1
 let floatSeq = 1
 
-function pushLog(log: CombatLogEntry[], text: string): CombatLogEntry[] {
-  return [...log, { id: logSeq++, text }].slice(-18)
+function pushLog(log: CombatLogEntry[], text: string, rarity?: CombatLogEntry['rarity']): CombatLogEntry[] {
+  return [...log, { id: logSeq++, text, rarity }].slice(-18)
 }
 
 function pushFloat(floats: FloatingHit[], text: string, kind: FloatingHit['kind']): FloatingHit[] {
@@ -92,9 +119,9 @@ function rebuildCombat(
     playerSwing: 0,
     monsterSwing: 0,
     deathCooldownMs: previous?.deathCooldownMs ?? 0,
-    log: previous
-      ? pushLog(previous.log, `Hunting ${def.name}.`)
-      : [{ id: logSeq++, text: `${def.name} blocks the path.` }],
+    despawnMs: 0,
+    encounter: (previous?.encounter ?? 0) + 1,
+    log: previous?.log ?? [],
     floats: [],
   }
 }
@@ -111,13 +138,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   monsterIndex: 0,
   queuedMonsterIndex: 0,
   selectedItemId: null,
+  unseenItemIds: [],
   pendingNodeIds: [],
   pendingRemovalNodeIds: [],
   realmPickerOpen: false,
   offlineGrant: null,
   error: null,
 
-  hydrate: (player, items) => {
+  hydrate: (player, items, knownItemIds) => {
     let highestRealmId = Math.max(player.highestRealmId ?? 1, player.realmId)
     if (player.realmProgress >= REALM_PROGRESS_CAP) {
       const nxt = nextRealm(player.realmId)
@@ -129,22 +157,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
       highestRealmId,
     }
     const stats = deriveStats(synced, items)
+    const realm = getRealm(synced.realmId)
+    const monsterIndex = huntIndex(realm, synced.monsterIndex)
+    const queuedMonsterIndex = huntIndex(realm, synced.queuedMonsterIndex)
+    const resumed = { ...synced, monsterIndex, queuedMonsterIndex }
+    const bagIds = new Set(items.filter((item) => !item.equippedSlot).map((item) => item.id))
+    const known = new Set(knownItemIds ?? get().items.map((item) => item.id))
+    const stored = readUnseen(resumed.id)
+    const fresh = items.filter((item) => !item.equippedSlot && !known.has(item.id)).map((item) => item.id)
+    const unseenItemIds = mergeUnseen(resumed.id, stored, fresh, bagIds)
     set({
       ready: true,
       paused: false,
-      player: synced,
+      player: resumed,
       items,
       stats,
-      combat: rebuildCombat(synced, stats, 0),
-      monsterIndex: 0,
-      queuedMonsterIndex: 0,
+      combat: rebuildCombat(resumed, stats, monsterIndex),
+      monsterIndex,
+      queuedMonsterIndex,
+      unseenItemIds,
       pendingNodeIds: [],
       pendingRemovalNodeIds: [],
       dirty: false,
     })
   },
 
-  setScreen: (screen) => set({ screen }),
+  setScreen: (screen) => {
+    const { screen: previous, player, unseenItemIds } = get()
+    if (previous === 'inventory' && screen !== 'inventory' && player && unseenItemIds.length > 0) {
+      writeUnseen(player.id, [])
+      set({ screen, unseenItemIds: [] })
+      return
+    }
+    set({ screen })
+  },
   selectItem: (id) => set({ selectedItemId: id }),
   setPaused: (paused) => set({ paused }),
   markClean: () => set({ dirty: false }),
@@ -154,8 +200,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { player } = get()
     if (!player) return
     const realm = getRealm(player.realmId)
-    const nextIndex = ((index % realm.monsters.length) + realm.monsters.length) % realm.monsters.length
-    set({ queuedMonsterIndex: nextIndex })
+    const nextIndex = huntIndex(realm, index)
+    set({
+      queuedMonsterIndex: nextIndex,
+      player: { ...player, queuedMonsterIndex: nextIndex },
+      dirty: true,
+    })
   },
 
   tick: (dt = TICK_MS) => {
@@ -178,7 +228,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         playerMaxHp: stats.hp,
         playerSwing: 0,
         monsterSwing: 0,
-        log: revived ? pushLog(combat.log, 'You rise and fight again.') : combat.log,
+        log: combat.log,
         floats: combat.floats.slice(-6),
       }
       if (revived && queuedMonsterIndex !== monsterIndex) {
@@ -188,9 +238,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
           playerHp: stats.hp,
           deathCooldownMs: 0,
         })
-        nextCombat.log = pushLog(nextCombat.log, `The next hunt is ${getRealm(player.realmId).monsters[nextMonsterIndex].name}.`)
       }
-      set({ combat: nextCombat, monsterIndex: nextMonsterIndex })
+      set({
+        player: nextMonsterIndex === monsterIndex ? player : { ...player, monsterIndex: nextMonsterIndex },
+        combat: nextCombat,
+        monsterIndex: nextMonsterIndex,
+        dirty: get().dirty || nextMonsterIndex !== monsterIndex,
+      })
+      return
+    }
+
+    if (combat.despawnMs > 0) {
+      const remaining = Math.max(0, combat.despawnMs - dt)
+      if (remaining > 0) {
+        set({ combat: { ...combat, despawnMs: remaining } })
+        return
+      }
+      const spawnedIndex = queuedMonsterIndex
+      const spawned = {
+        ...rebuildCombat(player, stats, spawnedIndex, { ...combat, despawnMs: 0 }),
+        playerSwing: Math.min(PLAYER_SWING_MS - 1, DESPAWN_MS),
+      }
+      const indexChanged = spawnedIndex !== player.monsterIndex
+      set({
+        player: indexChanged ? { ...player, monsterIndex: spawnedIndex } : player,
+        combat: spawned,
+        monsterIndex: spawnedIndex,
+        dirty: get().dirty || indexChanged,
+      })
       return
     }
 
@@ -201,6 +276,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       floats: combat.floats.slice(-6),
       playerMaxHp: stats.hp,
     }
+    let nextUnseen = get().unseenItemIds
     if (nextCombat.playerHp > 0 && nextCombat.playerHp < nextStats.hp) {
       nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + nextStats.hpRegen * (dt / 1000))
     }
@@ -235,16 +311,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         nextItems = result.items
         nextStats = deriveStats(nextPlayer, nextItems)
         dirty = true
-        const loot = result.reward.item ? ` Loot: ${result.reward.item.name}.` : ''
-        const scrap = result.reward.scrap ? ` +${result.reward.scrap} scrap.` : ''
-        nextMonsterIndex = queuedMonsterIndex
-        nextCombat = rebuildCombat(nextPlayer, nextStats, nextMonsterIndex, nextCombat)
-        nextCombat.log = pushLog(
-          combat.log,
-          `Defeated ${combat.monster.def.name}. +${result.reward.xp} XP, +${result.reward.gold} gold.${scrap}${loot}`,
-        )
-        if (result.reward.leveled) {
-          nextCombat.log = pushLog(nextCombat.log, `Reached level ${result.reward.newLevel}.`)
+        nextCombat = {
+          ...nextCombat,
+          monster: { ...nextCombat.monster, hp: 0 },
+          despawnMs: DESPAWN_MS,
+          log: result.reward.item
+            ? pushLog(nextCombat.log, result.reward.item.name, result.reward.item.rarity)
+            : nextCombat.log,
+        }
+        if (result.reward.item) {
+          const bagIds = new Set(nextItems.filter((item) => !item.equippedSlot).map((item) => item.id))
+          nextUnseen = mergeUnseen(nextPlayer.id, nextUnseen, [result.reward.item.id], bagIds)
         }
       }
     }
@@ -255,7 +332,6 @@ export const useGameStore = create<GameStore>((set, get) => ({
         nextCombat = {
           ...nextCombat,
           floats: pushFloat(nextCombat.floats, 'BLOCK', 'block'),
-          log: pushLog(nextCombat.log, `Blocked ${nextCombat.monster.def.name}.`),
         }
       } else {
         const hit = strikeDamage(nextCombat.monster.def.attack, nextStats.defense, 0.05, 1.4, rng)
@@ -275,18 +351,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
             playerSwing: 0,
             monsterSwing: 0,
             monster: spawnMonster(pickMonster(downedRealm, nextMonsterIndex)),
-            log: pushLog(nextCombat.log, 'You fall. The hunt waits while you recover.'),
           }
         }
       }
     }
 
+    if (nextMonsterIndex !== nextPlayer.monsterIndex) {
+      nextPlayer = { ...nextPlayer, monsterIndex: nextMonsterIndex }
+      dirty = true
+    }
     set({
       player: nextPlayer,
       items: nextItems,
       stats: nextStats,
       combat: nextCombat,
       monsterIndex: nextMonsterIndex,
+      unseenItemIds: nextUnseen,
       dirty: get().dirty || dirty,
     })
   },
@@ -295,12 +375,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { items, player, combat } = get()
     if (!player) return
     const nextItems = applyEquip(items, itemId, slot)
+    if (nextItems === items) return
     const stats = deriveStats(player, nextItems)
     set({
       items: nextItems,
       stats,
       dirty: true,
       combat: combat ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) } : combat,
+    })
+  },
+
+  salvage: (itemIds) => {
+    const { items, player, selectedItemId, unseenItemIds } = get()
+    if (!player || itemIds.length === 0) return
+    const chosen = new Set(itemIds)
+    let scrap = 0
+    const nextItems = items.filter((item) => {
+      if (!chosen.has(item.id) || item.equippedSlot || item.locked) return true
+      scrap += salvageScrap(item)
+      return false
+    })
+    if (nextItems.length === items.length) return
+    const bagIds = new Set(nextItems.filter((item) => !item.equippedSlot).map((item) => item.id))
+    const nextUnseen = mergeUnseen(player.id, unseenItemIds, [], bagIds)
+    set({
+      items: nextItems,
+      player: { ...player, scrap: player.scrap + scrap },
+      selectedItemId: selectedItemId && chosen.has(selectedItemId) ? null : selectedItemId,
+      unseenItemIds: nextUnseen,
+      dirty: true,
     })
   },
 
@@ -426,7 +529,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (realmId === player.highestRealmId && player.realmId !== realmId && player.realmProgress >= REALM_PROGRESS_CAP) {
       realmProgress = 0
     }
-    const nextPlayer = { ...player, realmId, realmProgress }
+    const nextPlayer = { ...player, realmId, realmProgress, monsterIndex: 0, queuedMonsterIndex: 0 }
     const stats = deriveStats(nextPlayer, items)
     set({
       player: nextPlayer,

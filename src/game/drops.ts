@@ -3,6 +3,7 @@ import { chance, pickWeighted, randInt } from './rng'
 import { isPercentStat } from './format'
 import type { Affix, Item, ItemBase, Rarity, StatKey } from './types'
 import { RARITY_LABEL } from './rarity'
+import { newId } from '../lib/id'
 
 const affixCount: Record<Rarity, number> = {
   common: 1,
@@ -114,7 +115,7 @@ export function rollItemDrop(
   }
   const prefix = rarity === 'common' ? '' : `${RARITY_LABEL[rarity]} `
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     playerId,
     slotType: base.slotType,
     weaponHand: base.weaponHand,

@@ -8,6 +8,7 @@ import { InventoryScreen } from './features/inventory/InventoryScreen'
 import { SkillTreeScreen } from './features/skills/SkillTreeScreen'
 import { Shell } from './features/shell/Shell'
 import { AuthScreen } from './features/auth/AuthScreen'
+import { newId } from './lib/id'
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 
@@ -48,8 +49,9 @@ export function App() {
     void (async () => {
       try {
         const save = await loadSave(userId)
+        const knownItemIds = save.items.map((item) => item.id)
         const { grant } = await runSettlement(save.player, save.items)
-        useGameStore.getState().hydrate(grant.player, grant.items)
+        useGameStore.getState().hydrate(grant.player, grant.items, knownItemIds)
         if (grant.kills > 0) {
           useGameStore.setState({ offlineGrant: grant })
         }
@@ -86,7 +88,11 @@ export function App() {
       if (!isReady || !player) return
       useGameStore.getState().setPaused(true)
       void runSettlement(player, items).then(({ grant }) => {
-        useGameStore.getState().hydrate(grant.player, grant.items)
+        useGameStore.getState().hydrate(
+          grant.player,
+          grant.items,
+          items.map((item) => item.id),
+        )
         if (grant.kills > 0) useGameStore.setState({ offlineGrant: grant })
         useGameStore.getState().setPaused(false)
       })
@@ -107,7 +113,7 @@ export function App() {
     return (
       <AuthScreen
         onLocal={() => {
-          const id = crypto.randomUUID()
+          const id = newId()
           localStorage.setItem('idle-relic-expedition:guest', id)
           setLocalId(id)
           setBoot('loading')

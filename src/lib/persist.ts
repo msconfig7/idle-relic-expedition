@@ -1,3 +1,4 @@
+import { getRealm, huntIndex } from '../game/combat'
 import { createPlayer } from '../game/player'
 import { settleOffline } from '../game/offline'
 import { normalizeRarity } from '../game/rarity'
@@ -14,9 +15,13 @@ function readLocal(): SaveBlob | null {
     const raw = localStorage.getItem(LOCAL_KEY)
     if (!raw) return null
     const parsed = JSON.parse(raw) as SaveBlob
+    const realm = getRealm(parsed.player.realmId)
+    const monsterIndex = huntIndex(realm, parsed.player.monsterIndex)
     const player = {
       ...parsed.player,
       highestRealmId: Math.max(parsed.player.highestRealmId ?? parsed.player.realmId, parsed.player.realmId),
+      monsterIndex,
+      queuedMonsterIndex: huntIndex(realm, parsed.player.queuedMonsterIndex ?? monsterIndex),
     }
     const items = parsed.items.map((item) => {
       const rarity = normalizeRarity(String(item.rarity))
