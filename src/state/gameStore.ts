@@ -302,8 +302,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ? Math.max(1, Math.round(hit.damage * nextStats.lifeSteal))
           : 0
       if (steal > 0) {
+        const beforeHp = nextCombat.playerHp
         nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + steal)
-        nextCombat.floats = pushFloat(nextCombat.floats, `+${steal}`, 'heal')
+        const gained = nextCombat.playerHp - beforeHp
+        if (gained > 0) {
+          nextCombat.floats = pushFloat(nextCombat.floats, `+${Math.round(gained)}`, 'heal')
+        }
       }
       if (hp <= 0) {
         const result = applyKill(nextPlayer, nextItems, nextCombat.monster, nextStats, rng)
@@ -335,11 +339,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       } else {
         const hit = strikeDamage(nextCombat.monster.def.attack, nextStats.defense, 0.05, 1.4, rng)
+        const beforeHp = nextCombat.playerHp
         const hp = Math.max(0, nextCombat.playerHp - hit.damage)
         nextCombat = {
           ...nextCombat,
           playerHp: hp,
-          floats: pushFloat(nextCombat.floats, `${hit.damage}`, 'monster'),
+          floats:
+            beforeHp > hp
+              ? pushFloat(nextCombat.floats, `${hit.damage}`, 'monster')
+              : nextCombat.floats,
         }
         if (hp <= 0) {
           nextMonsterIndex = queuedMonsterIndex

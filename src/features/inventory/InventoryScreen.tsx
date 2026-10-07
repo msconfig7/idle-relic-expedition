@@ -1,7 +1,15 @@
-import { slotsForType } from '../../game/equipment'
+import { equippedInSlot, slotsForType } from '../../game/equipment'
 import { salvageScrap } from '../../game/salvage'
 import { RARITY_CHIP, RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
-import { MAX_INVENTORY, RARITIES, SLOT_TYPES, type Rarity, type SlotType } from '../../game/types'
+import {
+  MAX_INVENTORY,
+  RARITIES,
+  SLOT_TYPES,
+  type EquipSlot,
+  type Item,
+  type Rarity,
+  type SlotType,
+} from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import { ItemCard, slotLabel } from '../items/ItemCard'
 import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
@@ -17,6 +25,15 @@ export function InventoryScreen() {
   const unseenItemIds = useGameStore((s) => s.unseenItemIds)
   const unseen = useMemo(() => new Set(unseenItemIds), [unseenItemIds])
   const selected = items.find((item) => item.id === selectedItemId && !item.equippedSlot)
+  const equippedComparisons = useMemo(() => {
+    if (!selected) return [] as { slot: EquipSlot; equipped: Item }[]
+    const filled: { slot: EquipSlot; equipped: Item }[] = []
+    for (const slot of slotsForType(selected.slotType)) {
+      const equipped = equippedInSlot(items, slot)
+      if (equipped) filled.push({ slot, equipped })
+    }
+    return filled
+  }, [items, selected])
   const [filterOpen, setFilterOpen] = useState(false)
   const [types, setTypes] = useState<SlotType[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
@@ -110,7 +127,28 @@ export function InventoryScreen() {
       )}
       {selected && (
         <Modal title={selected.name} onClose={() => selectItem(null)}>
-          <ItemCard item={selected} />
+          <ItemCard
+            item={selected}
+            compareWith={equippedComparisons.map(({ slot, equipped }) => ({
+              label: equippedComparisons.length > 1 ? slotLabel(slot) : undefined,
+              item: equipped,
+            }))}
+          />
+          {equippedComparisons.length > 0 && (
+            <div className="mt-3 space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500">
+                Currently equipped
+              </p>
+              {equippedComparisons.map(({ slot, equipped }) => (
+                <div key={slot}>
+                  {equippedComparisons.length > 1 && (
+                    <p className="mb-1 text-[11px] text-stone-500">{slotLabel(slot)}</p>
+                  )}
+                  <ItemCard item={equipped} compareWith={[{ item: selected }]} />
+                </div>
+              ))}
+            </div>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
             {slotsForType(selected.slotType).map((slot) => (
               <button

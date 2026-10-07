@@ -1,19 +1,24 @@
-import { formatAffix } from '../../game/format'
+import { formatAffix, isPercentStat } from '../../game/format'
 import { RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
-import type { EquipSlot, Item, SlotType, WeaponHand } from '../../game/types'
+import type { EquipSlot, Item, SlotType, StatKey, WeaponHand } from '../../game/types'
 import { equippedInSlot } from '../../game/equipment'
+import type { ReactNode } from 'react'
 
 export function ItemCard({
   item,
   equipped,
+  compareWith,
   selected,
   onSelect,
 }: {
   item: Item
   equipped?: Item
+  compareWith?: { label?: string; item: Item }[]
   selected?: boolean
   onSelect?: () => void
 }) {
+  const targets = compareWith ?? (equipped ? [{ item: equipped }] : undefined)
+
   return (
     <button
       type="button"
@@ -32,7 +37,7 @@ export function ItemCard({
         {item.affixes.map((affix, i) => (
           <li key={`${affix.stat}-${i}`}>
             {formatAffix(affix)}
-            {equipped && compare(affix.stat, item, equipped)}
+            {targets && compareDeltas(affix.stat, item, targets)}
           </li>
         ))}
       </ul>
@@ -40,12 +45,43 @@ export function ItemCard({
   )
 }
 
-function compare(stat: Item['affixes'][0]['stat'], item: Item, equipped: Item) {
-  const a = item.affixes.filter((x) => x.stat === stat).reduce((s, x) => s + x.value, 0)
-  const b = equipped.affixes.filter((x) => x.stat === stat).reduce((s, x) => s + x.value, 0)
-  const d = a - b
+function compareDeltas(
+  stat: StatKey,
+  item: Item,
+  targets: { label?: string; item: Item }[],
+): ReactNode {
+  const parts = targets
+    .map(({ label, item: equipped }) => {
+      const text = formatDelta(stat, item, equipped)
+      if (!text) return null
+      const d = statTotal(item, stat) - statTotal(equipped, stat)
+      return (
+        <span key={label ?? equipped.id} className={d > 0 ? ' text-emerald-400' : ' text-red-400'}>
+          {' '}
+          ({label ? `${label} ` : ''}
+          {text})
+        </span>
+      )
+    })
+    .filter(Boolean)
+  return parts.length ? parts : null
+}
+
+function statTotal(item: Item, stat: StatKey): number {
+  return item.affixes.filter((x) => x.stat === stat).reduce((s, x) => s + x.value, 0)
+}
+
+function formatDelta(stat: StatKey, item: Item, equipped: Item): string | null {
+  const d = statTotal(item, stat) - statTotal(equipped, stat)
   if (Math.abs(d) < 1e-6) return null
-  return <span className={d > 0 ? ' text-emerald-400' : ' text-red-400'}> ({d > 0 ? '+' : ''}{d.toFixed(2)})</span>
+  const sign = d > 0 ? '+' : ''
+  if (stat === 'hpRegen') return `${sign}${d.toFixed(1)}/s`
+  if (isPercentStat(stat)) {
+    const digits =
+      stat === 'critMulti' || stat === 'xpMod' || stat === 'goldMod' || stat === 'lifeSteal' ? 0 : 1
+    return `${sign}${(d * 100).toFixed(digits)}%`
+  }
+  return `${sign}${Number.isInteger(d) ? d : d.toFixed(1)}`
 }
 
 const SLOT_LABEL: Record<EquipSlot, string> = {

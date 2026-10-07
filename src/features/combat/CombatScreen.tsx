@@ -104,12 +104,12 @@ export function CombatScreen() {
             pct={monsterPct}
             color="bg-red-600"
           />
-          {cleared && (
-            <p className="mt-2 text-center text-xs text-amber-200">This realm is cleared. Hunt or travel onward.</p>
-          )}
         </div>
       </section>
-      <div className="overflow-hidden rounded-xl" style={{ background: realm.theme.accent }}>
+      <div
+        className="overflow-hidden rounded-xl border-black/50"
+        style={{ background: realm.theme.accent }}
+      >
         <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1 text-stone-950">
           <p className="truncate text-sm font-semibold">{realm.name}</p>
@@ -139,7 +139,7 @@ export function CombatScreen() {
         </button>
         </div>
         <div
-          className="h-1.5 border-t border-black/40 bg-stone-800"
+          className="h-2 border-t border-black/45 bg-black/40"
           role="progressbar"
           aria-valuenow={Math.floor(realmPct)}
           aria-valuemin={0}
@@ -147,7 +147,7 @@ export function CombatScreen() {
           aria-label="Realm progress"
           title={realmLabel}
         >
-          <div className="h-full bg-stone-950" style={{ width: `${realmPct}%` }} />
+          <div className="h-full bg-black/60" style={{ width: `${realmPct}%` }} />
         </div>
       </div>
       {panel === 'targets' && (

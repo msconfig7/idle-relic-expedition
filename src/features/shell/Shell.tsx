@@ -22,7 +22,6 @@ export function Shell({ children }: { children: ReactNode }) {
   const grant = useGameStore((s) => s.offlineGrant)
   const acknowledge = useGameStore((s) => s.acknowledgeOffline)
   const realmPickerOpen = useGameStore((s) => s.realmPickerOpen)
-  const openRealmPicker = useGameStore((s) => s.openRealmPicker)
   const pendingCount = useGameStore((s) => s.pendingNodeIds.length)
   const pendingRemovalCount = useGameStore((s) => s.pendingRemovalNodeIds.length)
   const remainingPoints = player.skillPointsUnspent - pendingCount + pendingRemovalCount
@@ -65,19 +64,12 @@ export function Shell({ children }: { children: ReactNode }) {
         >
           <div className="px-3 py-2">
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-stone-950"
-                onClick={openRealmPicker}
-              >
+              <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-stone-950">
                 Lv. {player.level}
-              </button>
-              <button type="button" className="min-w-0 flex-1 truncate text-left text-sm text-amber-100" onClick={openRealmPicker}>
-                {realm.name}
-              </button>
+              </span>
               <button
                 type="button"
-                className="shrink-0 text-[11px] text-stone-500 underline"
+                className="ml-auto shrink-0 text-[11px] text-stone-500 underline"
                 onClick={() => {
                   localStorage.removeItem('idle-relic-expedition:guest')
                   void supabase?.auth.signOut()
@@ -94,7 +86,7 @@ export function Shell({ children }: { children: ReactNode }) {
               <span className="ml-auto text-[11px] text-stone-500">XP {Math.floor(xpPct)}%</span>
             </div>
             <div className="mt-1 h-1 overflow-hidden rounded-full bg-stone-800">
-              <div className="h-full bg-emerald-600" style={{ width: `${xpPct}%` }} />
+              <div className="h-full bg-purple-700" style={{ width: `${xpPct}%` }} />
             </div>
           </div>
         </header>
