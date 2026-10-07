@@ -1,6 +1,5 @@
-import { REALM_PROGRESS_CAP, STAT_LABELS, formatStat, getRealm } from '../../game'
+import { REALM_PROGRESS_CAP, getRealm } from '../../game'
 import { DESPAWN_MS } from '../../game/types'
-import type { StatKey } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import type { FloatingHit } from '../../game/types'
 import { Modal } from '../ui/Modal'
@@ -9,7 +8,6 @@ import { useEffect, useRef, useState } from 'react'
 export function CombatScreen() {
   const player = useGameStore((s) => s.player)!
   const combat = useGameStore((s) => s.combat)!
-  const stats = useGameStore((s) => s.stats)!
   const monsterIndex = useGameStore((s) => s.monsterIndex)
   const queuedMonsterIndex = useGameStore((s) => s.queuedMonsterIndex)
   const queueMonster = useGameStore((s) => s.queueMonster)
@@ -23,7 +21,8 @@ export function CombatScreen() {
   const cleared = player.realmId < player.highestRealmId
   const lastOutId = useRef<number | null>(null)
   const portraitRef = useRef<HTMLImageElement>(null)
-  const [panel, setPanel] = useState<'targets' | 'stats' | null>(null)
+  const [panel, setPanel] = useState<'targets' | null>(null)
+  const [slashId, setSlashId] = useState<number | null>(null)
   const fighting = realm.monsters[monsterIndex]
   const realmPct =
     player.realmId < player.highestRealmId
@@ -33,38 +32,36 @@ export function CombatScreen() {
   const despawning = combat.despawnMs > 0
 
   useEffect(() => {
+    setSlashId(null)
+    lastOutId.current = null
+    const el = portraitRef.current
+    if (el) el.classList.remove('monster-hit-flash')
+  }, [combat.encounter])
+
+  useEffect(() => {
     if (!outgoing || lastOutId.current === outgoing.id) return
     lastOutId.current = outgoing.id
     if (combat.despawnMs > 0) return
     const el = portraitRef.current
-    if (!el) return
-    el.classList.remove('monster-hit-flash')
-    void el.offsetWidth
-    el.classList.add('monster-hit-flash')
+    if (el) {
+      el.classList.remove('monster-hit-flash')
+      void el.offsetWidth
+      el.classList.add('monster-hit-flash')
+    }
+    setSlashId(outgoing.id)
   }, [outgoing, combat.despawnMs])
 
   return (
     <div className="grid gap-2">
       <div className="-mx-3 -mt-3 bg-stone-950 px-3 pb-2 pt-2">
-        <div className="flex items-center gap-2">
-          <div className="min-w-0 flex-1">
-            <Bar
-              overlay={`${Math.ceil(combat.playerHp)}/${combat.playerMaxHp}`}
-              pct={playerPct}
-              color="bg-emerald-500"
-            />
-          </div>
-          <button
-            type="button"
-            className="shrink-0 rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-[11px] text-stone-100"
-            onClick={() => setPanel('stats')}
-          >
-            Stats
-          </button>
-        </div>
-        <div className="mt-1 flex h-4 items-center justify-end gap-2">
-          <HitNumber hit={incoming} className="text-sm font-semibold" />
-          <HitNumber hit={heal} className="text-sm font-semibold" />
+        <Bar
+          overlay={`${Math.ceil(combat.playerHp)}/${combat.playerMaxHp}`}
+          pct={playerPct}
+          color="bg-emerald-500"
+        />
+        <div className="mt-1 grid h-4 grid-cols-[2.5rem_2.5rem] items-center justify-center gap-0.5">
+          <HitNumber hit={incoming} className="block w-full text-center text-sm font-semibold" />
+          <HitNumber hit={heal} className="block w-full text-center text-sm font-semibold" />
         </div>
       </div>
       <section
@@ -95,6 +92,9 @@ export function CombatScreen() {
               }`}
               style={despawning ? { animationDuration: `${DESPAWN_MS}ms` } : undefined}
             />
+            {slashId != null && !despawning && (
+              <span key={slashId} className="monster-slice pointer-events-none absolute" aria-hidden />
+            )}
             <div className="pointer-events-none absolute inset-0 grid place-items-center">
               <HitNumber hit={outgoing} className="text-center text-2xl font-bold" />
             </div>
@@ -139,7 +139,7 @@ export function CombatScreen() {
         </button>
         </div>
         <div
-          className="h-1.5 bg-black/35"
+          className="h-1.5 border-t border-black/40 bg-stone-800"
           role="progressbar"
           aria-valuenow={Math.floor(realmPct)}
           aria-valuemin={0}
@@ -147,7 +147,7 @@ export function CombatScreen() {
           aria-label="Realm progress"
           title={realmLabel}
         >
-          <div className="h-full bg-white/90" style={{ width: `${realmPct}%` }} />
+          <div className="h-full bg-stone-950" style={{ width: `${realmPct}%` }} />
         </div>
       </div>
       {panel === 'targets' && (
@@ -189,20 +189,6 @@ export function CombatScreen() {
               )
             })}
           </div>
-        </Modal>
-      )}
-      {panel === 'stats' && (
-        <Modal title="Attributes" onClose={() => setPanel(null)}>
-          <dl className="grid grid-cols-2 gap-2">
-            {(Object.keys(STAT_LABELS) as StatKey[]).map((key) => (
-              <div key={key} className="rounded-lg bg-stone-950 px-2.5 py-2">
-                <dt className="text-[10px] font-medium uppercase tracking-wide text-stone-500">
-                  {STAT_LABELS[key]}
-                </dt>
-                <dd className="truncate text-sm tabular-nums text-stone-100">{formatStat(key, stats[key])}</dd>
-              </div>
-            ))}
-          </dl>
         </Modal>
       )}
     </div>

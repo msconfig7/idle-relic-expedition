@@ -194,7 +194,7 @@ function LevelBurst({ level, onDone }: { level: number; onDone: () => void }) {
   const onDoneRef = useRef(onDone)
   onDoneRef.current = onDone
   useEffect(() => {
-    const timer = window.setTimeout(() => onDoneRef.current(), 1200)
+    const timer = window.setTimeout(() => onDoneRef.current(), 3500)
     return () => window.clearTimeout(timer)
   }, [])
 

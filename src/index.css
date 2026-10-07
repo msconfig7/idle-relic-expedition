@@ -13,8 +13,12 @@ body,
 
 @keyframes monster-hit {
   0% {
-    filter: brightness(2.35) saturate(1.25);
-    transform: scale(1.07);
+    filter: brightness(2.05) saturate(1.12);
+    transform: scale(1.06);
+  }
+  28% {
+    filter: brightness(1.25) saturate(0.7);
+    transform: scale(1.015);
   }
   100% {
     filter: brightness(1) saturate(1);
@@ -22,30 +26,63 @@ body,
   }
 }
 
-.monster-hit-flash {
-  animation: monster-hit 200ms ease-out;
+@keyframes monster-slice {
+  0% {
+    opacity: 0;
+    transform: rotate(-32deg) translateX(-10px);
+  }
+  18% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-32deg) translateX(10px);
+  }
+}
+
+.monster-slice {
+  left: 50%;
+  top: 50%;
+  width: 29%;
+  height: 1px;
+  margin-left: -14.5%;
+  margin-top: -0.5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    #fff7ed 35%,
+    #fca5a5 50%,
+    #fff7ed 65%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 3px rgba(252, 165, 165, 0.75),
+    0 0 7px rgba(254, 243, 199, 0.4);
+  animation: monster-slice 240ms ease-out forwards;
 }
 
 @keyframes hit-number-in {
   0% {
     opacity: 0;
-    transform: translateY(4px) scale(0.92);
+    transform: scale(0.96);
   }
-  12% {
+  6% {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: scale(1);
   }
-  55% {
+  78% {
     opacity: 1;
+    transform: scale(1);
   }
   100% {
     opacity: 0;
-    transform: translateY(-6px) scale(1);
+    transform: scale(1);
   }
 }
 
 .hit-number {
-  animation: hit-number-in 480ms ease-out forwards;
+  animation: hit-number-in 900ms ease-out forwards;
 }
 
 @keyframes monster-despawn {
@@ -86,13 +123,21 @@ body,
   animation: monster-arrive 240ms ease-out;
 }
 
+.monster-hit-flash,
+.monster-arrive.monster-hit-flash {
+  animation: monster-hit 280ms ease-out;
+}
+
 @keyframes level-glow {
   0% {
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.35);
   }
-  18% {
+  12% {
     opacity: 0.9;
+  }
+  70% {
+    opacity: 0.55;
   }
   100% {
     opacity: 0;
@@ -102,7 +147,7 @@ body,
 
 .level-glow {
   background: radial-gradient(circle, rgba(253, 230, 138, 0.85) 0%, rgba(245, 158, 11, 0.28) 42%, transparent 70%);
-  animation: level-glow 980ms ease-out forwards;
+  animation: level-glow 2500ms ease-out forwards;
 }
 
 @keyframes level-ring {
@@ -119,11 +164,11 @@ body,
 .level-ring {
   opacity: 0;
   transform: translate(-50%, -50%);
-  animation: level-ring 880ms ease-out forwards;
+  animation: level-ring 2200ms ease-out forwards;
 }
 
 .level-ring-late {
-  animation-delay: 90ms;
+  animation-delay: 180ms;
 }
 
 @keyframes level-spark {
@@ -131,7 +176,7 @@ body,
     opacity: 0;
     transform: translate(-50%, -50%) scale(0.5);
   }
-  14% {
+  10% {
     opacity: 1;
   }
   100% {
@@ -143,7 +188,7 @@ body,
 .level-spark {
   opacity: 0;
   transform: translate(-50%, -50%);
-  animation: level-spark 900ms ease-out forwards;
+  animation: level-spark 2300ms ease-out forwards;
   animation-delay: var(--delay);
 }
 
@@ -152,20 +197,21 @@ body,
     opacity: 0;
     transform: translate(-50%, -30%) scale(0.84);
   }
-  16% {
+  8% {
     opacity: 1;
     transform: translate(-50%, -50%) scale(1);
   }
-  58% {
+  78% {
     opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -78%) scale(1.05);
+    transform: translate(-50%, -62%) scale(1.04);
   }
 }
 
 .level-label {
-  animation: level-label 1100ms ease-out forwards;
+  animation: level-label 2600ms ease-out forwards;
   text-shadow: 0 0 18px rgba(251, 191, 36, 0.85);
 }
