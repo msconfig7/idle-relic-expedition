@@ -1,6 +1,6 @@
 import { equippedInSlot, slotsForType } from '../../game/equipment'
 import { salvageScrap } from '../../game/salvage'
-import { RARITY_CHIP, RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
+import { RARITY_CHIP, RARITY_CLASS, RARITY_LABEL, RARITY_TEXT } from '../../game/rarity'
 import {
   MAX_INVENTORY,
   RARITIES,
@@ -14,7 +14,9 @@ import { useGameStore } from '../../state/gameStore'
 import { ItemCard, slotLabel } from '../items/ItemCard'
 import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+
+const LONG_PRESS_MS = 450
 
 export function InventoryScreen() {
   const items = useGameStore((s) => s.items)
@@ -41,6 +43,10 @@ export function InventoryScreen() {
   const [draftRarities, setDraftRarities] = useState<Rarity[]>([])
   const [salvageOpen, setSalvageOpen] = useState(false)
   const [salvageRarities, setSalvageRarities] = useState<Rarity[]>([])
+  const [salvageMode, setSalvageMode] = useState(false)
+  const [salvagePickIds, setSalvagePickIds] = useState<string[]>([])
+  const longPressTimer = useRef<number | null>(null)
+  const longPressFired = useRef(false)
 
   const unequipped = useMemo(() => items.filter((item) => !item.equippedSlot), [items])
   const bag = useMemo(() => {
@@ -58,28 +64,109 @@ export function InventoryScreen() {
     [unequipped, salvageRarities],
   )
   const salvageTotal = salvageTargets.reduce((sum, item) => sum + salvageScrap(item), 0)
+  const salvagePicked = useMemo(() => {
+    const pick = new Set(salvagePickIds)
+    return unequipped.filter((item) => pick.has(item.id) && !item.locked)
+  }, [unequipped, salvagePickIds])
+  const salvagePickCount = salvagePicked.length
+  const salvagePickScrap = salvagePicked.reduce((sum, item) => sum + salvageScrap(item), 0)
+
+  useEffect(() => {
+    return () => clearLongPress()
+  }, [])
+
+  useEffect(() => {
+    const bagIds = new Set(unequipped.map((item) => item.id))
+    setSalvagePickIds((current) => {
+      const next = current.filter((id) => bagIds.has(id))
+      return next.length === current.length ? current : next
+    })
+  }, [unequipped])
+
+  useEffect(() => {
+    if (salvageMode && salvagePickIds.length === 0) setSalvageMode(false)
+  }, [salvageMode, salvagePickIds])
+
+  function clearLongPress() {
+    if (longPressTimer.current != null) {
+      window.clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function exitSalvageMode() {
+    setSalvageMode(false)
+    setSalvagePickIds([])
+  }
+
+  function enterSalvageMode(itemId: string) {
+    selectItem(null)
+    setSalvageMode(true)
+    setSalvagePickIds([itemId])
+  }
+
+  function toggleSalvagePick(itemId: string) {
+    setSalvagePickIds((current) =>
+      current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId],
+    )
+  }
+
+  function onItemPointerDown(item: Item) {
+    if (item.locked) return
+    longPressFired.current = false
+    clearLongPress()
+    longPressTimer.current = window.setTimeout(() => {
+      longPressFired.current = true
+      longPressTimer.current = null
+      if (salvageMode) toggleSalvagePick(item.id)
+      else enterSalvageMode(item.id)
+    }, LONG_PRESS_MS)
+  }
+
+  function onItemClick(item: Item) {
+    if (longPressFired.current) {
+      longPressFired.current = false
+      return
+    }
+    if (salvageMode) {
+      if (!item.locked) toggleSalvagePick(item.id)
+      return
+    }
+    selectItem(item.id)
+  }
 
   return (
-    <div>
+    <div className={salvageMode && salvagePickCount > 0 ? 'pb-20' : undefined}>
       <div className="mb-3 flex items-end justify-between gap-2">
         <div>
           <h2 className="font-serif text-xl text-amber-100">Equipment</h2>
           <p className="text-sm text-stone-400">
             {unequipped.length}/{MAX_INVENTORY} in bag
+            {salvageMode ? ` · ${salvagePickCount} selected` : ''}
           </p>
         </div>
         <div className="flex gap-2">
-        <button
-          type="button"
-          className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm disabled:opacity-40"
-          disabled={unequipped.length === 0}
-          onClick={() => {
-            setSalvageRarities([])
-            setSalvageOpen(true)
-          }}
-        >
-          Salvage
-        </button>
+        {salvageMode ? (
+          <button
+            type="button"
+            className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm"
+            onClick={exitSalvageMode}
+          >
+            Cancel
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm disabled:opacity-40"
+            disabled={unequipped.length === 0}
+            onClick={() => {
+              setSalvageRarities([])
+              setSalvageOpen(true)
+            }}
+          >
+            Salvage
+          </button>
+        )}
         <button
           type="button"
           className="relative rounded-lg border border-stone-600 px-3 py-1.5 text-sm"
@@ -97,20 +184,29 @@ export function InventoryScreen() {
         </div>
       </div>
       {bag.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-stone-700 p-8 text-stone-500">
+        <p className="text-center rounded-2xl border border-dashed border-stone-700 p-8 text-stone-500">
           {unequipped.length === 0
-            ? 'No spare equipment. Stay on combat and let the expedition farm.'
+            ? 'No equipments.'
             : 'No equipment matches these filters.'}
         </p>
       ) : (
         <div className="grid grid-cols-4 gap-2">
-          {bag.map((item) => (
+          {bag.map((item) => {
+            const picked = salvageMode && salvagePickIds.includes(item.id)
+            return (
             <button
               key={item.id}
               type="button"
-              onClick={() => selectItem(item.id)}
-              className={`relative flex flex-col items-center rounded-xl border-2 bg-stone-950 px-1 py-1.5 text-center ${RARITY_CLASS[item.rarity]} ${
-                item.id === selectedItemId ? 'ring-2 ring-white/70' : ''
+              onPointerDown={() => onItemPointerDown(item)}
+              onPointerUp={clearLongPress}
+              onPointerLeave={clearLongPress}
+              onPointerCancel={clearLongPress}
+              onContextMenu={(event) => event.preventDefault()}
+              onClick={() => onItemClick(item)}
+              className={`relative flex flex-col items-center rounded-xl border-2 bg-stone-950 px-1 py-1.5 text-center select-none touch-manipulation ${
+                picked
+                  ? `border-red-500 ring-2 ring-red-500/70 ${RARITY_TEXT[item.rarity]}`
+                  : `${RARITY_CLASS[item.rarity]} ${item.id === selectedItemId ? 'ring-2 ring-white/70' : ''}`
               }`}
             >
               {unseen.has(item.id) ? (
@@ -118,11 +214,30 @@ export function InventoryScreen() {
                   New
                 </span>
               ) : null}
-              <img src={SLOT_ICON[item.slotType]} alt="" className="h-14 w-full object-contain" />
+              <img src={SLOT_ICON[item.slotType]} alt="" className="h-14 w-full object-contain" draggable={false} />
               <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-stone-100">{item.name}</span>
               <span className="text-[9px] uppercase tracking-wide">{TYPE_LABEL[item.slotType]}</span>
             </button>
-          ))}
+            )
+          })}
+        </div>
+      )}
+      {salvageMode && salvagePickCount > 0 && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-16 z-30 flex justify-center px-3">
+          <button
+            type="button"
+            className="mb-3 pointer-events-auto flex w-full max-w-[406px] items-center justify-center gap-2 rounded-xl bg-red-700 px-4 py-3 text-sm font-medium text-red-50 shadow-lg shadow-black/40"
+            onClick={() => {
+              salvage(salvagePicked.map((item) => item.id))
+              exitSalvageMode()
+            }}
+          >
+            <SalvageIcon />
+            <span>
+              Salvage {salvagePickCount} item{salvagePickCount === 1 ? '' : 's'}
+              <span className="ml-1.5 text-red-200/90">· +{salvagePickScrap.toLocaleString()} scrap</span>
+            </span>
+          </button>
         </div>
       )}
       {selected && (
@@ -310,5 +425,24 @@ export function InventoryScreen() {
         </Modal>
       )}
     </div>
+  )
+}
+
+function SalvageIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5 shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M14.5 4.5 19 9l-8.5 8.5H6v-4.5L14.5 4.5Z" />
+      <path d="m12 7 5 5" />
+      <path d="M4 20h16" />
+    </svg>
   )
 }
