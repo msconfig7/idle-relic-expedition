@@ -18,7 +18,7 @@ export function CombatScreen() {
   const outgoing = latest(combat.floats, (hit) => hit.kind === 'player' || hit.kind === 'crit')
   const incoming = latest(combat.floats, (hit) => hit.kind === 'monster' || hit.kind === 'block')
   const heal = latest(combat.floats, (hit) => hit.kind === 'heal')
-  const cleared = player.realmId < player.highestRealmId
+  //const cleared = player.realmId < player.highestRealmId
   const lastOutId = useRef<number | null>(null)
   const portraitRef = useRef<HTMLImageElement>(null)
   const [panel, setPanel] = useState<'targets' | null>(null)
