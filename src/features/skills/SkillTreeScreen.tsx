@@ -1,9 +1,14 @@
 import { canAllocateNode, skillTree } from '../../content/skillTree'
 import { formatAffix } from '../../game/format'
 import { useGameStore } from '../../state/gameStore'
-import { TransformComponent, TransformWrapper, useTransformComponent } from 'react-zoom-pan-pinch'
-import { useEffect, useMemo, useState } from 'react'
-import type { NodeKind } from '../../game/types'
+import {
+  TransformComponent,
+  TransformWrapper,
+  useTransformComponent,
+  type ReactZoomPanPinchRef,
+} from 'react-zoom-pan-pinch'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ClusterId, NodeKind, SkillNode } from '../../game/types'
 
 const clusterStroke: Record<string, string> = {
   hub: '#f59e0b',
@@ -126,6 +131,31 @@ function NodeGlyph({
   )
 }
 
+const clusterLabel: Record<ClusterId, string> = {
+  hub: 'Heart',
+  str: 'Might',
+  dex: 'Cunning',
+  int: 'Lore',
+}
+
+const kindLabel: Record<NodeKind, string> = {
+  small: 'Minor',
+  notable: 'Notable',
+  keystone: 'Keystone',
+}
+
+type CardFilter = 'notable' | ClusterId
+
+const cardFilters: { id: CardFilter; label: string }[] = [
+  { id: 'notable', label: 'Notables' },
+  { id: 'hub', label: 'Heart' },
+  { id: 'str', label: 'Might' },
+  { id: 'dex', label: 'Cunning' },
+  { id: 'int', label: 'Lore' },
+]
+
+const kindRank: Record<NodeKind, number> = { keystone: 0, notable: 1, small: 2 }
+
 function Plate({
   cx,
   cy,
@@ -147,6 +177,48 @@ function Plate({
   return <circle cx={cx} cy={cy} r={r} fill={fill} opacity={0.9} />
 }
 
+function BonusCard({
+  node,
+  selected,
+  status,
+  onSelect,
+  buttonRef,
+}: {
+  node: SkillNode
+  selected: boolean
+  status: string | null
+  onSelect: () => void
+  buttonRef: (el: HTMLButtonElement | null) => void
+}) {
+  return (
+    <button
+      type="button"
+      ref={buttonRef}
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={`flex w-[11.25rem] shrink-0 snap-center flex-col rounded-xl border border-stone-700 border-l-4 bg-stone-950 p-2.5 text-left ${
+        selected ? 'ring-2 ring-amber-400' : ''
+      }`}
+      style={{ borderLeftColor: clusterStroke[node.cluster] }}
+    >
+      <p className="truncate font-medium text-amber-100" title={node.name}>
+        {node.name}
+      </p>
+      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-stone-500">
+        {kindLabel[node.kind]} · {clusterLabel[node.cluster]}
+        {status ? ` · ${status}` : ''}
+      </p>
+      <ul className="mt-1.5 space-y-0.5 text-xs leading-4">
+        {node.bonuses.map((bonus, index) => (
+          <li key={`${bonus.stat}-${index}`} className={bonus.value < 0 ? 'text-red-300' : 'text-stone-200'}>
+            {formatAffix(bonus)}
+          </li>
+        ))}
+      </ul>
+    </button>
+  )
+}
+
 export function SkillTreeScreen() {
   const player = useGameStore((s) => s.player)!
   const pendingNodeIds = useGameStore((s) => s.pendingNodeIds)
@@ -157,10 +229,12 @@ export function SkillTreeScreen() {
   const error = useGameStore((s) => s.error)
   const [hoverId, setHoverId] = useState<number | null>(null)
   const [assignMode, setAssignMode] = useState(false)
+  const [cardFilter, setCardFilter] = useState<CardFilter>('notable')
+  const transformRef = useRef<ReactZoomPanPinchRef | null>(null)
+  const cardRefs = useRef(new Map<number, HTMLButtonElement>())
   const allocated = useMemo(() => new Set(player.allocatedNodeIds), [player.allocatedNodeIds])
   const pending = useMemo(() => new Set(pendingNodeIds), [pendingNodeIds])
   const pendingRemoval = useMemo(() => new Set(pendingRemovalNodeIds), [pendingRemovalNodeIds])
-  const hover = hoverId !== null ? skillTree.byId.get(hoverId) : undefined
   const remaining = player.skillPointsUnspent - pendingNodeIds.length + pendingRemovalNodeIds.length
   const pendingCount = pendingNodeIds.length + pendingRemovalNodeIds.length
   const refundCost = pendingRemovalNodeIds.length * player.level * 2
@@ -173,8 +247,43 @@ export function SkillTreeScreen() {
   const width = Math.max(...xs) - minX + 80
   const height = Math.max(...ys) - minY + 80
 
+  const bonusCards = useMemo(() => {
+    return skillTree.nodes
+      .filter((node) => (cardFilter === 'notable' ? node.kind !== 'small' : node.cluster === cardFilter))
+      .sort((a, b) => kindRank[a.kind] - kindRank[b.kind] || a.id - b.id)
+  }, [cardFilter])
+
+  useEffect(() => {
+    if (hoverId === null) return
+    cardRefs.current.get(hoverId)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
+  }, [hoverId, bonusCards])
+
+  function nodeStatus(id: number): string | null {
+    if (pendingRemoval.has(id)) return 'pending removal'
+    if (allocated.has(id)) return 'allocated'
+    if (pending.has(id)) return 'pending'
+    return null
+  }
+
+  function showNodeCard(node: SkillNode) {
+    setHoverId(node.id)
+    if (cardFilter === 'notable' && node.kind !== 'small') return
+    if (cardFilter === node.cluster) return
+    setCardFilter(node.cluster)
+  }
+
+  function focusNode(node: SkillNode) {
+    const api = transformRef.current
+    const wrapper = api?.instance.wrapperComponent
+    if (!api || !wrapper) return
+    const scale = Math.max(api.state.scale, 0.72)
+    const x = wrapper.clientWidth / 2 - (node.x - minX) * scale
+    const y = wrapper.clientHeight / 2 - (node.y - minY) * scale
+    void api.setTransform(x, y, scale, 280)
+  }
+
   return (
-    <div className="flex h-full min-h-0 w-full flex-1 flex-col gap-2">
+    <div className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden">
       <div className="flex shrink-0 items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="font-serif text-xl text-amber-100">Skill Path</h2>
@@ -199,6 +308,7 @@ export function SkillTreeScreen() {
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-800 bg-[#070504] [overscroll-behavior:none] [touch-action:none]">
         <TransformWrapper
+          ref={transformRef}
           minScale={0.16}
           maxScale={1.35}
           fitOnInit="contain"
@@ -209,7 +319,7 @@ export function SkillTreeScreen() {
           doubleClick={{ disabled: true }}
           wheel={{ step: 0.00032 }}
           pinch={{ step: 4 }}
-          panning={{ velocityDisabled: true, excluded: assignMode ? ['skill-node'] : [] }}
+          panning={{ velocityDisabled: true, excluded: ['skill-node'] }}
         >
           <SpaceBackdrop contentWidth={width} contentHeight={height} />
           <TransformComponent wrapperClass="!h-full !w-full" contentClass="!w-max !h-max">
@@ -253,13 +363,22 @@ export function SkillTreeScreen() {
                 return (
                   <g
                     key={node.id}
-                    className={`skill-node ${assignMode ? 'cursor-pointer' : ''}`}
-                    onMouseEnter={() => setHoverId(node.id)}
+                    className="skill-node cursor-pointer"
                     onClick={() => {
-                      setHoverId(node.id)
+                      showNodeCard(node)
                       if (assignMode) queueNode(node.id)
                     }}
                   >
+                    {hoverId === node.id && (
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={plateSize(node.kind) + 10}
+                        fill="none"
+                        stroke="#fde68a"
+                        strokeWidth={2.5}
+                      />
+                    )}
                     {showPlate && (
                       <Plate
                         cx={cx}
@@ -283,26 +402,43 @@ export function SkillTreeScreen() {
             </svg>
           </TransformComponent>
         </TransformWrapper>
-        {hover && (
-          <div className="pointer-events-none absolute right-2 top-2 max-w-[11rem] rounded-xl border border-stone-700 bg-stone-950/95 p-2 text-sm">
-            <p className="font-medium text-amber-100">{hover.name}</p>
-            <p className="text-[11px] uppercase text-stone-500">
-              {hover.kind} · {hover.cluster}
-              {pendingRemoval.has(hover.id)
-                ? ' · pending removal'
-                : allocated.has(hover.id)
-                  ? ' · allocated'
-                  : pending.has(hover.id)
-                    ? ' · pending'
-                    : ''}
-            </p>
-            <ul className="mt-2 space-y-1 text-xs text-stone-300">
-              {hover.bonuses.map((b, i) => (
-                <li key={i}>{formatAffix(b)}</li>
-              ))}
-            </ul>
-          </div>
-        )}
+      </div>
+      <div className="shrink-0">
+        <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+          {cardFilters.map((filter) => (
+            <button
+              key={filter.id}
+              type="button"
+              aria-pressed={cardFilter === filter.id}
+              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] uppercase tracking-wide ${
+                cardFilter === filter.id
+                  ? 'bg-amber-500 font-medium text-stone-950'
+                  : 'border border-stone-700 text-stone-400'
+              }`}
+              onClick={() => setCardFilter(filter.id)}
+            >
+              {filter.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-1.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] snap-x snap-mandatory">
+          {bonusCards.map((node) => (
+            <BonusCard
+              key={node.id}
+              node={node}
+              selected={hoverId === node.id}
+              status={nodeStatus(node.id)}
+              buttonRef={(el) => {
+                if (el) cardRefs.current.set(node.id, el)
+                else cardRefs.current.delete(node.id)
+              }}
+              onSelect={() => {
+                setHoverId(node.id)
+                focusNode(node)
+              }}
+            />
+          ))}
+        </div>
       </div>
       {pendingCount > 0 && (
         <div className="grid shrink-0 grid-cols-2 gap-2">

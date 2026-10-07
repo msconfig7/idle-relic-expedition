@@ -92,7 +92,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </header>
         <main
           className={`min-h-0 flex-1 p-3 ${
-            screen === 'skills' ? 'flex overflow-hidden' : 'overflow-y-auto'
+            screen === 'skills' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto'
           }`}
         >
           {children}
