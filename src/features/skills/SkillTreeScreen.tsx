@@ -205,7 +205,7 @@ export function SkillTreeScreen() {
   const error = useGameStore((s) => s.error)
   const [viewId, setViewId] = useState<number | null>(null)
   const transformRef = useRef<ReactZoomPanPinchRef | null>(null)
-  const cardRefs = useRef(new Map<number, HTMLButtonElement>())
+  const cardRefs = useRef(new Map<number, HTMLDivElement>())
   const allocated = useMemo(() => new Set(player.allocatedNodeIds), [player.allocatedNodeIds])
   const pending = useMemo(() => new Set(pendingNodeIds), [pendingNodeIds])
   const pendingRemoval = useMemo(() => new Set(pendingRemovalNodeIds), [pendingRemovalNodeIds])
@@ -404,27 +404,37 @@ export function SkillTreeScreen() {
         ) : (
           <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]">
             {nextNodes.map((node) => (
-              <button
+              <div
                 key={node.id}
-                type="button"
                 ref={(el) => {
                   if (el) cardRefs.current.set(node.id, el)
                   else cardRefs.current.delete(node.id)
                 }}
-                aria-pressed={viewId === node.id}
                 className={`w-[11.25rem] shrink-0 ${cardFrame(viewId === node.id)}`}
                 style={{ borderLeftColor: clusterStroke[node.cluster] }}
-                onClick={() => {
-                  viewNode(node)
-                  focusNode(node)
-                  queueNode(node.id)
-                }}
               >
-                <BonusDetails node={node} status={null} />
-                <span className="mt-2 block rounded-lg bg-amber-700 py-1 text-center text-xs font-medium text-amber-50">
+                <button
+                  type="button"
+                  aria-pressed={viewId === node.id}
+                  className="w-full text-left"
+                  onClick={() => {
+                    viewNode(node)
+                    focusNode(node)
+                  }}
+                >
+                  <BonusDetails node={node} status={null} />
+                </button>
+                <button
+                  type="button"
+                  className="mt-2 w-full rounded-lg bg-amber-700 py-1 text-center text-xs font-medium text-amber-50"
+                  onClick={() => {
+                    viewNode(node)
+                    queueNode(node.id)
+                  }}
+                >
                   Take
-                </span>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         )}
