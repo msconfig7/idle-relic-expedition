@@ -1,5 +1,6 @@
-import { canAllocateNode, skillTree } from '../../content/skillTree'
+import { canAllocateNode, isAdjacentAllocated, skillTree } from '../../content/skillTree'
 import { formatAffix } from '../../game/format'
+import { START_NODE_ID } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import {
   TransformComponent,
@@ -144,16 +145,6 @@ const kindLabel: Record<NodeKind, string> = {
   keystone: 'Keystone',
 }
 
-type CardFilter = 'notable' | ClusterId
-
-const cardFilters: { id: CardFilter; label: string }[] = [
-  { id: 'notable', label: 'Notables' },
-  { id: 'hub', label: 'Heart' },
-  { id: 'str', label: 'Might' },
-  { id: 'dex', label: 'Cunning' },
-  { id: 'int', label: 'Lore' },
-]
-
 const kindRank: Record<NodeKind, number> = { keystone: 0, notable: 1, small: 2 }
 
 function Plate({
@@ -177,30 +168,9 @@ function Plate({
   return <circle cx={cx} cy={cy} r={r} fill={fill} opacity={0.9} />
 }
 
-function BonusCard({
-  node,
-  selected,
-  status,
-  onSelect,
-  buttonRef,
-}: {
-  node: SkillNode
-  selected: boolean
-  status: string | null
-  onSelect: () => void
-  buttonRef: (el: HTMLButtonElement | null) => void
-}) {
+function BonusDetails({ node, status }: { node: SkillNode; status: string | null }) {
   return (
-    <button
-      type="button"
-      ref={buttonRef}
-      aria-pressed={selected}
-      onClick={onSelect}
-      className={`flex w-[11.25rem] shrink-0 snap-center flex-col rounded-xl border border-stone-700 border-l-4 bg-stone-950 p-2.5 text-left ${
-        selected ? 'ring-2 ring-amber-400' : ''
-      }`}
-      style={{ borderLeftColor: clusterStroke[node.cluster] }}
-    >
+    <>
       <p className="truncate font-medium text-amber-100" title={node.name}>
         {node.name}
       </p>
@@ -215,8 +185,14 @@ function BonusCard({
           </li>
         ))}
       </ul>
-    </button>
+    </>
   )
+}
+
+function cardFrame(selected: boolean) {
+  return `rounded-xl border border-stone-700 border-l-4 bg-stone-950 p-2.5 text-left ${
+    selected ? 'ring-2 ring-amber-400' : ''
+  }`
 }
 
 export function SkillTreeScreen() {
@@ -227,9 +203,7 @@ export function SkillTreeScreen() {
   const confirmNodes = useGameStore((s) => s.confirmNodes)
   const discardNodes = useGameStore((s) => s.discardNodes)
   const error = useGameStore((s) => s.error)
-  const [hoverId, setHoverId] = useState<number | null>(null)
-  const [assignMode, setAssignMode] = useState(false)
-  const [cardFilter, setCardFilter] = useState<CardFilter>('notable')
+  const [viewId, setViewId] = useState<number | null>(null)
   const transformRef = useRef<ReactZoomPanPinchRef | null>(null)
   const cardRefs = useRef(new Map<number, HTMLButtonElement>())
   const allocated = useMemo(() => new Set(player.allocatedNodeIds), [player.allocatedNodeIds])
@@ -247,16 +221,28 @@ export function SkillTreeScreen() {
   const width = Math.max(...xs) - minX + 80
   const height = Math.max(...ys) - minY + 80
 
-  const bonusCards = useMemo(() => {
+  const pathIds = useMemo(() => {
+    const ids = new Set<number>()
+    for (const id of player.allocatedNodeIds) {
+      if (!pendingRemoval.has(id)) ids.add(id)
+    }
+    for (const id of pendingNodeIds) ids.add(id)
+    return ids
+  }, [player.allocatedNodeIds, pendingNodeIds, pendingRemoval])
+
+  const nextNodes = useMemo(() => {
     return skillTree.nodes
-      .filter((node) => (cardFilter === 'notable' ? node.kind !== 'small' : node.cluster === cardFilter))
+      .filter((node) => !allocated.has(node.id) && !pending.has(node.id) && isAdjacentAllocated(node.id, pathIds))
       .sort((a, b) => kindRank[a.kind] - kindRank[b.kind] || a.id - b.id)
-  }, [cardFilter])
+  }, [allocated, pending, pathIds])
+
+  const viewed = viewId !== null ? skillTree.byId.get(viewId) : undefined
+  const viewedInNext = viewed ? nextNodes.some((node) => node.id === viewed.id) : false
 
   useEffect(() => {
-    if (hoverId === null) return
-    cardRefs.current.get(hoverId)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' })
-  }, [hoverId, bonusCards])
+    if (viewId === null || !viewedInNext) return
+    cardRefs.current.get(viewId)?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+  }, [viewId, viewedInNext, nextNodes])
 
   function nodeStatus(id: number): string | null {
     if (pendingRemoval.has(id)) return 'pending removal'
@@ -265,11 +251,8 @@ export function SkillTreeScreen() {
     return null
   }
 
-  function showNodeCard(node: SkillNode) {
-    setHoverId(node.id)
-    if (cardFilter === 'notable' && node.kind !== 'small') return
-    if (cardFilter === node.cluster) return
-    setCardFilter(node.cluster)
+  function viewNode(node: SkillNode) {
+    setViewId(node.id)
   }
 
   function focusNode(node: SkillNode) {
@@ -292,19 +275,8 @@ export function SkillTreeScreen() {
             {pendingCount > 0 ? ` · ${pendingCount} pending` : ''}
             {pendingRemovalNodeIds.length > 0 ? ` · ${refundCost.toLocaleString()} gold` : ''}
           </p>
-          {assignMode && <p className="text-xs text-amber-200/90">Tap a node to assign or refund.</p>}
           {error && <p className="text-sm text-red-400">{error}</p>}
         </div>
-        <button
-          type="button"
-          aria-pressed={assignMode}
-          className={`shrink-0 rounded-lg px-3 py-1.5 text-sm ${
-            assignMode ? 'bg-amber-500 font-medium text-stone-950' : 'border border-stone-600 text-stone-100'
-          }`}
-          onClick={() => setAssignMode((on) => !on)}
-        >
-          {assignMode ? 'Done' : 'Assign'}
-        </button>
       </div>
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-2xl border border-stone-800 bg-[#070504] [overscroll-behavior:none] [touch-action:none]">
         <TransformWrapper
@@ -364,12 +336,9 @@ export function SkillTreeScreen() {
                   <g
                     key={node.id}
                     className="skill-node cursor-pointer"
-                    onClick={() => {
-                      showNodeCard(node)
-                      if (assignMode) queueNode(node.id)
-                    }}
+                    onClick={() => viewNode(node)}
                   >
-                    {hoverId === node.id && (
+                    {viewId === node.id && (
                       <circle
                         cx={cx}
                         cy={cy}
@@ -404,41 +373,61 @@ export function SkillTreeScreen() {
         </TransformWrapper>
       </div>
       <div className="shrink-0">
-        <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
-          {cardFilters.map((filter) => (
-            <button
-              key={filter.id}
-              type="button"
-              aria-pressed={cardFilter === filter.id}
-              className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] uppercase tracking-wide ${
-                cardFilter === filter.id
-                  ? 'bg-amber-500 font-medium text-stone-950'
-                  : 'border border-stone-700 text-stone-400'
-              }`}
-              onClick={() => setCardFilter(filter.id)}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
-        <div className="mt-1.5 flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin] snap-x snap-mandatory">
-          {bonusCards.map((node) => (
-            <BonusCard
-              key={node.id}
-              node={node}
-              selected={hoverId === node.id}
-              status={nodeStatus(node.id)}
-              buttonRef={(el) => {
-                if (el) cardRefs.current.set(node.id, el)
-                else cardRefs.current.delete(node.id)
-              }}
-              onSelect={() => {
-                setHoverId(node.id)
-                focusNode(node)
-              }}
-            />
-          ))}
-        </div>
+        {viewed && !viewedInNext && (
+          <div className={cardFrame(true)} style={{ borderLeftColor: clusterStroke[viewed.cluster] }}>
+            <BonusDetails node={viewed} status={nodeStatus(viewed.id)} />
+            {pending.has(viewed.id) && (
+              <button
+                type="button"
+                className="mt-2 w-full rounded-lg border border-stone-600 py-1.5 text-xs text-stone-200"
+                onClick={() => queueNode(viewed.id)}
+              >
+                Undo
+              </button>
+            )}
+            {allocated.has(viewed.id) && viewed.id !== START_NODE_ID && (
+              <button
+                type="button"
+                className="mt-2 w-full rounded-lg border border-red-900 py-1.5 text-xs text-red-200"
+                onClick={() => queueNode(viewed.id)}
+              >
+                {pendingRemoval.has(viewed.id) ? 'Restore' : 'Refund'}
+              </button>
+            )}
+          </div>
+        )}
+        <p className={`mb-1 text-[11px] uppercase tracking-wide text-stone-500 ${viewed && !viewedInNext ? 'mt-2' : ''}`}>
+          Next
+        </p>
+        {nextNodes.length === 0 ? (
+          <p className="text-xs text-stone-500">No open nodes from here.</p>
+        ) : (
+          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]">
+            {nextNodes.map((node) => (
+              <button
+                key={node.id}
+                type="button"
+                ref={(el) => {
+                  if (el) cardRefs.current.set(node.id, el)
+                  else cardRefs.current.delete(node.id)
+                }}
+                aria-pressed={viewId === node.id}
+                className={`w-[11.25rem] shrink-0 ${cardFrame(viewId === node.id)}`}
+                style={{ borderLeftColor: clusterStroke[node.cluster] }}
+                onClick={() => {
+                  viewNode(node)
+                  focusNode(node)
+                  queueNode(node.id)
+                }}
+              >
+                <BonusDetails node={node} status={null} />
+                <span className="mt-2 block rounded-lg bg-amber-700 py-1 text-center text-xs font-medium text-amber-50">
+                  Take
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       {pendingCount > 0 && (
         <div className="grid shrink-0 grid-cols-2 gap-2">
@@ -454,10 +443,7 @@ export function SkillTreeScreen() {
             className={`rounded-lg py-2 text-sm font-medium text-amber-50 ${
               pendingRemovalNodeIds.length > 0 ? 'bg-red-800' : 'bg-amber-700'
             }`}
-            onClick={() => {
-              confirmNodes()
-              if (!useGameStore.getState().error) setAssignMode(false)
-            }}
+            onClick={() => confirmNodes()}
           >
             {pendingRemovalNodeIds.length > 0
               ? `Unassign ${pendingRemovalNodeIds.length} · ${refundCost.toLocaleString()} gold`
