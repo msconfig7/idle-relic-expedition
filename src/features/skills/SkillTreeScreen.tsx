@@ -424,16 +424,18 @@ export function SkillTreeScreen() {
                 >
                   <BonusDetails node={node} status={null} />
                 </button>
-                <button
-                  type="button"
-                  className="mt-2 w-full rounded-lg bg-amber-700 py-1 text-center text-xs font-medium text-amber-50"
-                  onClick={() => {
-                    viewNode(node)
-                    queueNode(node.id)
-                  }}
-                >
-                  Take
-                </button>
+                {remaining > 0 && (
+                  <button
+                    type="button"
+                    className="mt-2 w-full rounded-lg bg-amber-700 py-1 text-center text-xs font-medium text-amber-50"
+                    onClick={() => {
+                      viewNode(node)
+                      queueNode(node.id)
+                    }}
+                  >
+                    Take
+                  </button>
+                )}
               </div>
             ))}
           </div>
