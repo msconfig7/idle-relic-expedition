@@ -1,4 +1,4 @@
-import { STARTING_DIAMONDS, START_NODE_ID, CONTENT_VERSION } from './types'
+import { STARTING_DIAMONDS, CONTENT_VERSION } from './types'
 import type { PlayerState } from './types'
 
 export function createPlayer(id: string, now = Date.now()): PlayerState {
@@ -16,7 +16,7 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
     monsterIndex: 0,
     queuedMonsterIndex: 0,
     skillPointsUnspent: 3,
-    allocatedNodeIds: [START_NODE_ID],
+    allocatedNodeIds: [],
     lastSettledAt: now,
     contentVersion: CONTENT_VERSION,
   }

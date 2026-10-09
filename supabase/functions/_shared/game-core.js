@@ -1609,6 +1609,7 @@ function buildTree() {
 			"dex",
 			"int"
 		];
+		const spoke = i % 2 === 0;
 		nodes.push({
 			id,
 			x: Math.cos(angle) * 88,
@@ -1621,7 +1622,7 @@ function buildTree() {
 				value: stats[i] === "hp" ? 8 : 3
 			}]
 		});
-		edges.push({
+		if (spoke) edges.push({
 			a: 0,
 			b: id
 		});
@@ -1640,6 +1641,11 @@ function buildTree() {
 			angle: 5 * Math.PI / 6
 		}
 	];
+	const clusterNodeIds = {
+		str: [],
+		dex: [],
+		int: []
+	};
 	const gateways = [];
 	for (let i = 0; i < clusters.length; i++) {
 		const { cluster, angle } = clusters[i];
@@ -1717,6 +1723,7 @@ function buildTree() {
 				name,
 				bonuses
 			});
+			clusterNodeIds[cluster].push(id);
 		}
 		for (const cell of cells) {
 			const from = idByKey.get(`${cell.q},${cell.r}`);
@@ -1745,6 +1752,53 @@ function buildTree() {
 		if (rim) edges.push({
 			a: gateways[c],
 			b: rim.id
+		});
+	}
+	const placed = new Map(nodes.map((node) => [node.id, node]));
+	const bridges = [
+		[
+			hubIds[1],
+			"str",
+			"dex"
+		],
+		[
+			hubIds[3],
+			"dex",
+			"int"
+		],
+		[
+			hubIds[5],
+			"int",
+			"str"
+		]
+	];
+	for (const [bridgeId, leftCluster, rightCluster] of bridges) {
+		let best = Infinity;
+		let leftId = clusterNodeIds[leftCluster][0];
+		let rightId = clusterNodeIds[rightCluster][0];
+		for (const candidateLeft of clusterNodeIds[leftCluster]) {
+			const left = placed.get(candidateLeft);
+			for (const candidateRight of clusterNodeIds[rightCluster]) {
+				const right = placed.get(candidateRight);
+				const distance = (left.x - right.x) ** 2 + (left.y - right.y) ** 2;
+				if (distance < best) {
+					best = distance;
+					leftId = candidateLeft;
+					rightId = candidateRight;
+				}
+			}
+		}
+		const bridge = placed.get(bridgeId);
+		const left = placed.get(leftId);
+		const right = placed.get(rightId);
+		bridge.x = (left.x + right.x) / 2;
+		bridge.y = (left.y + right.y) / 2;
+		edges.push({
+			a: bridgeId,
+			b: leftId
+		}, {
+			a: bridgeId,
+			b: rightId
 		});
 	}
 	const byId = new Map(nodes.map((node) => [node.id, node]));
@@ -7368,7 +7422,7 @@ function playerFromRow(row) {
 		monsterIndex: row.monster_index ?? 0,
 		queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
 		skillPointsUnspent: row.skill_points_unspent,
-		allocatedNodeIds: row.allocated_node_ids ?? [0],
+		allocatedNodeIds: row.allocated_node_ids ?? [],
 		lastSettledAt: new Date(row.last_settled_at).getTime(),
 		contentVersion: row.content_version
 	});

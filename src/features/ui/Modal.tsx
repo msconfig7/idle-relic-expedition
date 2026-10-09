@@ -5,11 +5,13 @@ export function Modal({
   onClose,
   children,
   footer,
+  overlay,
 }: {
   title: string
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  overlay?: ReactNode
 }) {
   return (
     <div
@@ -30,6 +32,9 @@ export function Modal({
         </button>
         <h3 className="font-serif text-lg text-amber-100">{title}</h3>
         <div className="mt-2 min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {overlay ? (
+          <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-2xl">{overlay}</div>
+        ) : null}
         {footer ? <div className="mt-4">{footer}</div> : null}
       </div>
     </div>

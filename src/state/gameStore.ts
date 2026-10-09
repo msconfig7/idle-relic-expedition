@@ -226,7 +226,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set({ screen })
   },
-  selectItem: (id) => set({ selectedItemId: id }),
+  selectItem: (id) => {
+    const { player, unseenItemIds } = get()
+    if (!id || !player || !unseenItemIds.includes(id)) {
+      set({ selectedItemId: id })
+      return
+    }
+    const nextUnseen = unseenItemIds.filter((itemId) => itemId !== id)
+    writeUnseen(player.id, nextUnseen)
+    set({ selectedItemId: id, unseenItemIds: nextUnseen })
+  },
   setPaused: (paused) => set({ paused }),
   markClean: () => set({ dirty: false }),
   acknowledgeOffline: () => set({ offlineGrant: null }),

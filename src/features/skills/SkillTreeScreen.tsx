@@ -206,6 +206,7 @@ export function SkillTreeScreen() {
   const [viewId, setViewId] = useState<number | null>(null)
   const transformRef = useRef<ReactZoomPanPinchRef | null>(null)
   const cardRefs = useRef(new Map<number, HTMLDivElement>())
+  const emptyPress = useRef<{ x: number; y: number } | null>(null)
   const allocated = useMemo(() => new Set(player.allocatedNodeIds), [player.allocatedNodeIds])
   const pending = useMemo(() => new Set(pendingNodeIds), [pendingNodeIds])
   const pendingRemoval = useMemo(() => new Set(pendingRemovalNodeIds), [pendingRemovalNodeIds])
@@ -232,7 +233,11 @@ export function SkillTreeScreen() {
 
   const nextNodes = useMemo(() => {
     return skillTree.nodes
-      .filter((node) => !allocated.has(node.id) && !pending.has(node.id) && isAdjacentAllocated(node.id, pathIds))
+      .filter((node) => {
+        if (allocated.has(node.id) || pending.has(node.id)) return false
+        if (node.id === START_NODE_ID && !pathIds.has(START_NODE_ID)) return true
+        return isAdjacentAllocated(node.id, pathIds)
+      })
       .sort((a, b) => kindRank[a.kind] - kindRank[b.kind] || a.id - b.id)
   }, [allocated, pending, pathIds])
 
@@ -295,7 +300,32 @@ export function SkillTreeScreen() {
         >
           <SpaceBackdrop contentWidth={width} contentHeight={height} />
           <TransformComponent wrapperClass="!h-full !w-full" contentClass="!w-max !h-max">
-            <svg width={width} height={height} className="cursor-grab">
+            <svg
+              width={width}
+              height={height}
+              className="cursor-grab"
+              onPointerDown={(event) => {
+                if (event.target instanceof Element && event.target.closest('.skill-node')) {
+                  emptyPress.current = null
+                  return
+                }
+                emptyPress.current = { x: event.clientX, y: event.clientY }
+              }}
+              onPointerUp={(event) => {
+                const start = emptyPress.current
+                emptyPress.current = null
+                if (!start || (event.target instanceof Element && event.target.closest('.skill-node'))) return
+                const dx = event.clientX - start.x
+                const dy = event.clientY - start.y
+                if (dx * dx + dy * dy > 25) return
+                setViewId(null)
+              }}
+              onClick={(event) => {
+                if (event.target instanceof Element && event.target.closest('.skill-node')) return
+                setViewId(null)
+              }}
+            >
+              <rect width={width} height={height} fill="transparent" />
               {skillTree.edges.map((edge) => {
                 const a = skillTree.byId.get(edge.a)!
                 const b = skillTree.byId.get(edge.b)!
@@ -336,7 +366,10 @@ export function SkillTreeScreen() {
                   <g
                     key={node.id}
                     className="skill-node cursor-pointer"
-                    onClick={() => viewNode(node)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      viewNode(node)
+                    }}
                   >
                     {viewId === node.id && (
                       <circle
@@ -455,7 +488,13 @@ export function SkillTreeScreen() {
             className={`rounded-lg py-2 text-sm font-medium text-amber-50 ${
               pendingRemovalNodeIds.length > 0 ? 'bg-red-800' : 'bg-amber-700'
             }`}
-            onClick={() => confirmNodes()}
+            onClick={() => {
+              const settling = new Set([...pendingNodeIds, ...pendingRemovalNodeIds])
+              confirmNodes()
+              const state = useGameStore.getState()
+              const stillQueued = state.pendingNodeIds.length > 0 || state.pendingRemovalNodeIds.length > 0
+              if (!stillQueued && viewId !== null && settling.has(viewId)) setViewId(null)
+            }}
           >
             {pendingRemovalNodeIds.length > 0
               ? `Unassign ${pendingRemovalNodeIds.length} · ${refundCost.toLocaleString()} gold`

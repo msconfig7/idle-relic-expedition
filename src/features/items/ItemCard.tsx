@@ -1,25 +1,18 @@
-import { formatAffix, isPercentStat } from '../../game/format'
-import { listItemMods, modTotal } from '../../game/items'
+import { formatAffix } from '../../game/format'
+import { listItemMods } from '../../game/items'
 import { RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
-import type { EquipSlot, Item, SlotType, StatKey, WeaponHand } from '../../game/types'
+import type { EquipSlot, Item, SlotType, WeaponHand } from '../../game/types'
 import { equippedInSlot } from '../../game/equipment'
-import type { ReactNode } from 'react'
 
 export function ItemCard({
   item,
-  equipped,
-  compareWith,
   selected,
   onSelect,
 }: {
   item: Item
-  equipped?: Item
-  compareWith?: { label?: string; item: Item }[]
   selected?: boolean
   onSelect?: () => void
 }) {
-  const targets = compareWith ?? (equipped ? [{ item: equipped }] : undefined)
-
   return (
     <button
       type="button"
@@ -42,34 +35,11 @@ export function ItemCard({
           >
             {mod.kind !== 'implicit' && <span className="font-medium">{mod.name} · </span>}
             {formatAffix({ stat: mod.stat, value: mod.value })}
-            {targets && compareDeltas(mod.stat, item, targets)}
           </li>
         ))}
       </ul>
     </button>
   )
-}
-
-function compareDeltas(
-  stat: StatKey,
-  item: Item,
-  targets: { label?: string; item: Item }[],
-): ReactNode {
-  const parts = targets
-    .map(({ label, item: equipped }) => {
-      const text = formatDelta(stat, item, equipped)
-      if (!text) return null
-      const d = statTotal(item, stat) - statTotal(equipped, stat)
-      return (
-        <span key={label ?? equipped.id} className={d > 0 ? ' text-emerald-400' : ' text-red-400'}>
-          {' '}
-          ({label ? `${label} ` : ''}
-          {text})
-        </span>
-      )
-    })
-    .filter(Boolean)
-  return parts.length ? parts : null
 }
 
 const MOD_CLASS = {
@@ -78,23 +48,6 @@ const MOD_CLASS = {
   suffix: 'text-emerald-300',
   special: 'text-amber-200',
 } as const
-
-function statTotal(item: Item, stat: StatKey): number {
-  return modTotal(item, stat)
-}
-
-function formatDelta(stat: StatKey, item: Item, equipped: Item): string | null {
-  const d = statTotal(item, stat) - statTotal(equipped, stat)
-  if (Math.abs(d) < 1e-6) return null
-  const sign = d > 0 ? '+' : ''
-  if (stat === 'hpRegen') return `${sign}${d.toFixed(1)}/s`
-  if (isPercentStat(stat)) {
-    const digits =
-      stat === 'critMulti' || stat === 'xpMod' || stat === 'goldMod' || stat === 'lifeSteal' ? 0 : 1
-    return `${sign}${(d * 100).toFixed(digits)}%`
-  }
-  return `${sign}${Number.isInteger(d) ? d : d.toFixed(1)}`
-}
 
 const SLOT_LABEL: Record<EquipSlot, string> = {
   helmet: 'Helmet',

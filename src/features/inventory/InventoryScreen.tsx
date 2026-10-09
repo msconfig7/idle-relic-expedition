@@ -5,7 +5,6 @@ import {
   MAX_INVENTORY,
   RARITIES,
   SLOT_TYPES,
-  type EquipSlot,
   type Item,
   type Rarity,
   type SlotType,
@@ -13,6 +12,7 @@ import {
 import { useGameStore } from '../../state/gameStore'
 import { ForgeModal } from '../craft/ForgeModal'
 import { ItemCard, slotLabel } from '../items/ItemCard'
+import { SwapCompare } from '../items/SwapCompare'
 import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -28,15 +28,6 @@ export function InventoryScreen() {
   const unseenItemIds = useGameStore((s) => s.unseenItemIds)
   const unseen = useMemo(() => new Set(unseenItemIds), [unseenItemIds])
   const selected = items.find((item) => item.id === selectedItemId && !item.equippedSlot)
-  const equippedComparisons = useMemo(() => {
-    if (!selected) return [] as { slot: EquipSlot; equipped: Item }[]
-    const filled: { slot: EquipSlot; equipped: Item }[] = []
-    for (const slot of slotsForType(selected.slotType)) {
-      const equipped = equippedInSlot(items, slot)
-      if (equipped) filled.push({ slot, equipped })
-    }
-    return filled
-  }, [items, selected])
   const [filterOpen, setFilterOpen] = useState(false)
   const [types, setTypes] = useState<SlotType[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
@@ -44,6 +35,7 @@ export function InventoryScreen() {
   const [draftRarities, setDraftRarities] = useState<Rarity[]>([])
   const [forgeItemId, setForgeItemId] = useState<string | null>(null)
   const [salvageOpen, setSalvageOpen] = useState(false)
+  const [salvageAsk, setSalvageAsk] = useState(false)
   const [salvageRarities, setSalvageRarities] = useState<Rarity[]>([])
   const [salvageMode, setSalvageMode] = useState(false)
   const [salvagePickIds, setSalvagePickIds] = useState<string[]>([])
@@ -244,42 +236,40 @@ export function InventoryScreen() {
       )}
       {selected && (
         <Modal title={selected.name} onClose={() => selectItem(null)}>
-          <ItemCard
-            item={selected}
-            compareWith={equippedComparisons.map(({ slot, equipped }) => ({
-              label: equippedComparisons.length > 1 ? slotLabel(slot) : undefined,
-              item: equipped,
-            }))}
-          />
-          {equippedComparisons.length > 0 && (
-            <div className="mt-3 space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-stone-500">
-                Currently equipped
-              </p>
-              {equippedComparisons.map(({ slot, equipped }) => (
-                <div key={slot}>
-                  {equippedComparisons.length > 1 && (
-                    <p className="mb-1 text-[11px] text-stone-500">{slotLabel(slot)}</p>
-                  )}
-                  <ItemCard item={equipped} compareWith={[{ item: selected }]} />
-                </div>
-              ))}
-            </div>
-          )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {slotsForType(selected.slotType).map((slot) => (
-              <button
-                key={slot}
-                type="button"
-                className="rounded-lg bg-amber-800 px-3 py-1.5 text-sm"
-                onClick={() => {
-                  equip(selected.id, slot)
-                  selectItem(null)
-                }}
-              >
-                Equip {slotLabel(slot)}
-              </button>
-            ))}
+          <ItemCard item={selected} />
+          <div className="mt-3 space-y-2">
+            {slotsForType(selected.slotType).map((slot) => {
+              const equipped = equippedInSlot(items, slot)
+              if (!equipped) {
+                return (
+                  <button
+                    key={slot}
+                    type="button"
+                    className="w-full rounded-lg bg-amber-800 py-2 text-sm"
+                    onClick={() => {
+                      equip(selected.id, slot)
+                      selectItem(null)
+                    }}
+                  >
+                    Equip {slotLabel(slot)}
+                  </button>
+                )
+              }
+              return (
+                <SwapCompare
+                  key={slot}
+                  slot={slot}
+                  next={selected}
+                  current={equipped}
+                  onEquip={() => {
+                    equip(selected.id, slot)
+                    selectItem(null)
+                  }}
+                />
+              )
+            })}
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
               className="rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
@@ -289,13 +279,38 @@ export function InventoryScreen() {
             </button>
             <button
               type="button"
-              className="rounded-lg border border-red-900/80 px-3 py-1.5 text-sm text-red-300"
+              aria-label="Salvage"
+              disabled={selected.locked}
+              className="grid h-9 w-9 place-items-center rounded-lg border border-red-900/80 text-red-300 disabled:opacity-40"
+              onClick={() => setSalvageAsk(true)}
+            >
+              <SalvageIcon />
+            </button>
+          </div>
+        </Modal>
+      )}
+      {selected && salvageAsk && (
+        <Modal title="Salvage" onClose={() => setSalvageAsk(false)}>
+          <p className="text-sm text-stone-300">Break {selected.name} into scrap?</p>
+          <p className="mt-3 font-serif text-2xl text-amber-200">+{salvageScrap(selected).toLocaleString()} scrap</p>
+          <div className="mt-4 flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded-lg border border-stone-600 py-2 text-sm"
+              onClick={() => setSalvageAsk(false)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-lg bg-red-900 py-2 text-sm text-red-50"
               onClick={() => {
                 salvage([selected.id])
+                setSalvageAsk(false)
                 selectItem(null)
               }}
             >
-              Salvage · +{salvageScrap(selected)} scrap
+              Salvage
             </button>
           </div>
         </Modal>

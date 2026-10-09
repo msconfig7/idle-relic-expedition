@@ -138,6 +138,7 @@ function buildTree(): SkillTree {
     const id = nextId++
     hubIds.push(id)
     const stats: StatKey[] = ['hp', 'attack', 'defense', 'str', 'dex', 'int']
+    const spoke = i % 2 === 0
     nodes.push({
       id,
       x: Math.cos(angle) * 88,
@@ -147,7 +148,7 @@ function buildTree(): SkillTree {
       name: 'Awakening',
       bonuses: [{ stat: stats[i], value: stats[i] === 'hp' ? 8 : 3 }],
     })
-    edges.push({ a: 0, b: id })
+    if (spoke) edges.push({ a: START_NODE_ID, b: id })
   }
 
   const clusters: { cluster: Exclude<ClusterId, 'hub'>; angle: number }[] = [
@@ -155,6 +156,12 @@ function buildTree(): SkillTree {
     { cluster: 'dex', angle: Math.PI / 6 },
     { cluster: 'int', angle: (5 * Math.PI) / 6 },
   ]
+
+  const clusterNodeIds: Record<Exclude<ClusterId, 'hub'>, number[]> = {
+    str: [],
+    dex: [],
+    int: [],
+  }
 
   const gateways: number[] = []
   for (let i = 0; i < clusters.length; i++) {
@@ -224,6 +231,7 @@ function buildTree(): SkillTree {
         name,
         bonuses,
       })
+      clusterNodeIds[cluster].push(id)
     }
 
     for (const cell of cells) {
@@ -249,6 +257,36 @@ function buildTree(): SkillTree {
       .sort((a, b) => a.d - b.d)[0]
     if (rim) edges.push({ a: gateways[c], b: rim.id })
     void centerId
+  }
+
+  const placed = new Map(nodes.map((node) => [node.id, node]))
+  const bridges: [number, Exclude<ClusterId, 'hub'>, Exclude<ClusterId, 'hub'>][] = [
+    [hubIds[1], 'str', 'dex'],
+    [hubIds[3], 'dex', 'int'],
+    [hubIds[5], 'int', 'str'],
+  ]
+  for (const [bridgeId, leftCluster, rightCluster] of bridges) {
+    let best = Infinity
+    let leftId = clusterNodeIds[leftCluster][0]
+    let rightId = clusterNodeIds[rightCluster][0]
+    for (const candidateLeft of clusterNodeIds[leftCluster]) {
+      const left = placed.get(candidateLeft)!
+      for (const candidateRight of clusterNodeIds[rightCluster]) {
+        const right = placed.get(candidateRight)!
+        const distance = (left.x - right.x) ** 2 + (left.y - right.y) ** 2
+        if (distance < best) {
+          best = distance
+          leftId = candidateLeft
+          rightId = candidateRight
+        }
+      }
+    }
+    const bridge = placed.get(bridgeId)!
+    const left = placed.get(leftId)!
+    const right = placed.get(rightId)!
+    bridge.x = (left.x + right.x) / 2
+    bridge.y = (left.y + right.y) / 2
+    edges.push({ a: bridgeId, b: leftId }, { a: bridgeId, b: rightId })
   }
 
   const byId = new Map(nodes.map((node) => [node.id, node]))
@@ -278,10 +316,8 @@ export function canAllocateNode(
   const taken = [...allocated, ...pending]
   if (taken.includes(nodeId)) return { ok: false, reason: 'Already allocated.' }
   if (unspent < pending.length + 1) return { ok: false, reason: 'No skill points.' }
-  if (!isAdjacentAllocated(nodeId, new Set(taken))) {
-    return { ok: false, reason: 'Must connect to an allocated node.' }
-  }
-  return { ok: true }
+  if (nodeId === START_NODE_ID || isAdjacentAllocated(nodeId, new Set(taken))) return { ok: true }
+  return { ok: false, reason: 'Must connect to an allocated node.' }
 }
 
 export function prunePending(allocated: number[], pending: number[], removeId: number): number[] {

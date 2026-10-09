@@ -105,7 +105,7 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     monsterIndex: row.monster_index ?? 0,
     queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
     skillPointsUnspent: row.skill_points_unspent,
-    allocatedNodeIds: row.allocated_node_ids ?? [0],
+    allocatedNodeIds: row.allocated_node_ids ?? [],
     lastSettledAt: new Date(row.last_settled_at).getTime(),
     contentVersion: row.content_version,
   })
