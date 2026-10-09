@@ -8,8 +8,8 @@ Official docs: [CLI](https://docs.shipstatic.com/cli) · [API](https://docs.ship
 
 | | |
 | --- | --- |
-| URL | https://holo-fractal-3vzfd5t.shipstatic.com |
-| Deployment | `holo-fractal-3vzfd5t.shipstatic.com` |
+| URL | https://primed-spark-sevbb82.shipstatic.com |
+| Deployment | `primed-spark-sevbb82.shipstatic.com` |
 | Label | `idle-relic` |
 | Account | simsekm7@gmail.com (free plan) |
 
