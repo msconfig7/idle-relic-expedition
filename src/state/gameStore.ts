@@ -12,7 +12,10 @@ import {
   spawnMonster,
   strikeDamage,
 } from '../game'
+import { ascendItem as ascendItemCraft, rerollItemMod as rerollItemModCraft, temperItem as temperItemCraft } from '../game/craft'
+import type { CraftOutcome } from '../game/craft'
 import { salvageScrap } from '../game/salvage'
+import { essenceName } from '../content/essences'
 import { REALM_PROGRESS_CAP, START_NODE_ID, TICK_MS } from '../game/types'
 import { DEATH_COOLDOWN_MS, DESPAWN_MS, PLAYER_SWING_MS, MONSTER_SWING_MS } from '../game/types'
 import { mulberry32, hashSeed } from '../game/rng'
@@ -80,6 +83,13 @@ type GameStore = {
   equip: (itemId: string, slot: EquipSlot) => void
   unequip: (itemId: string) => void
   salvage: (itemIds: string[]) => void
+  temperItem: (itemId: string) => { ok: true; success: boolean } | { ok: false; reason: string }
+  rerollItemMod: (
+    itemId: string,
+    kind: 'prefix' | 'suffix',
+    index: number,
+  ) => { ok: true; success: boolean } | { ok: false; reason: string }
+  ascendItem: (itemId: string) => { ok: true; success: boolean } | { ok: false; reason: string }
   queueNode: (nodeId: number) => void
   confirmNodes: () => void
   discardNodes: () => void
@@ -101,6 +111,31 @@ function pushLog(log: CombatLogEntry[], text: string, rarity?: CombatLogEntry['r
 
 function pushFloat(floats: FloatingHit[], text: string, kind: FloatingHit['kind']): FloatingHit[] {
   return [...floats, { id: floatSeq++, text, kind }].slice(-8)
+}
+
+function applyCraft(
+  get: () => GameStore,
+  set: (partial: Partial<GameStore>) => void,
+  itemId: string,
+  run: (player: PlayerState, item: Item) => CraftOutcome,
+): CraftOutcome {
+  const { player, items, combat } = get()
+  const item = items.find((entry) => entry.id === itemId)
+  if (!player || !item) return { ok: false, reason: 'That relic is gone.' }
+  const outcome = run(player, item)
+  if (!outcome.ok) return outcome
+  const nextItems = items.map((entry) => (entry.id === itemId ? outcome.item : entry))
+  const stats = deriveStats(outcome.player, nextItems)
+  set({
+    player: outcome.player,
+    items: nextItems,
+    stats,
+    dirty: true,
+    combat: combat
+      ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) }
+      : combat,
+  })
+  return outcome
 }
 
 function rebuildCombat(
@@ -315,13 +350,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         nextItems = result.items
         nextStats = deriveStats(nextPlayer, nextItems)
         dirty = true
+        let killLog = nextCombat.log
+        if (result.reward.item) killLog = pushLog(killLog, result.reward.item.name, result.reward.item.rarity)
+        if (result.reward.essenceId) killLog = pushLog(killLog, `+1 ${essenceName(result.reward.essenceId)}`)
         nextCombat = {
           ...nextCombat,
           monster: { ...nextCombat.monster, hp: 0 },
           despawnMs: DESPAWN_MS,
-          log: result.reward.item
-            ? pushLog(nextCombat.log, result.reward.item.name, result.reward.item.rarity)
-            : nextCombat.log,
+          log: killLog,
         }
         if (result.reward.item) {
           const bagIds = new Set(nextItems.filter((item) => !item.equippedSlot).map((item) => item.id))
@@ -391,6 +427,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
       dirty: true,
       combat: combat ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) } : combat,
     })
+  },
+
+  temperItem: (itemId) => {
+    const outcome = applyCraft(get, set, itemId, (player, item) => temperItemCraft(player, item, Math.random))
+    return outcome.ok ? { ok: true, success: outcome.success } : outcome
+  },
+
+  rerollItemMod: (itemId, kind, index) => {
+    const outcome = applyCraft(get, set, itemId, (player, item) =>
+      rerollItemModCraft(player, item, kind, index, Math.random),
+    )
+    return outcome.ok ? { ok: true, success: outcome.success } : outcome
+  },
+
+  ascendItem: (itemId) => {
+    const outcome = applyCraft(get, set, itemId, (player, item) => ascendItemCraft(player, item, Math.random))
+    return outcome.ok ? { ok: true, success: outcome.success } : outcome
   },
 
   salvage: (itemIds) => {

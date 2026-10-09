@@ -62,14 +62,23 @@ export function Shell({ children }: { children: ReactNode }) {
             background: `linear-gradient(180deg, ${realm.theme.from}, #1c1917)`,
           }}
         >
-          <div className="px-3 py-2">
-            <div className="flex items-center gap-2">
-              <span className="shrink-0 rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-semibold text-stone-950">
-                Lv. {player.level}
+          <div className="flex items-center gap-3 px-3 py-2.5">
+            <div className="flex min-w-0 flex-1 items-center gap-3 text-xs tabular-nums">
+              <span className="inline-flex items-center gap-1 text-amber-300" title="Gold">
+                <GoldIcon />
+                {compact(player.gold)}
+              </span>
+              <span className="inline-flex items-center gap-1 text-cyan-300" title="Diamonds">
+                <DiamondIcon />
+                {compact(player.diamonds)}
+              </span>
+              <span className="inline-flex items-center gap-1 text-stone-300" title="Scrap">
+                <ScrapIcon />
+                {compact(player.scrap)}
               </span>
               <button
                 type="button"
-                className="ml-auto shrink-0 text-[11px] text-stone-500 underline"
+                className="ml-auto text-[10px] text-stone-500"
                 onClick={() => {
                   localStorage.removeItem('idle-relic-expedition:guest')
                   void supabase?.auth.signOut()
@@ -79,14 +88,11 @@ export function Shell({ children }: { children: ReactNode }) {
                 Sign out
               </button>
             </div>
-            <div className="mt-1.5 flex items-center gap-3 text-xs tabular-nums">
-              <span className="text-amber-300" title="Gold">● {compact(player.gold)}</span>
-              <span className="text-cyan-300" title="Diamonds">◆ {compact(player.diamonds)}</span>
-              <span className="text-stone-300" title="Scrap">■ {compact(player.scrap)}</span>
-              <span className="ml-auto text-[11px] text-stone-500">XP {Math.floor(xpPct)}%</span>
-            </div>
-            <div className="mt-1 h-1 overflow-hidden rounded-full bg-stone-800">
-              <div className="h-full bg-purple-700" style={{ width: `${xpPct}%` }} />
+            <div className="flex w-1/5 shrink-0 flex-col items-center gap-1">
+              <p className="text-[11px] font-medium tracking-wide text-amber-100">Level: {player.level}</p>
+              <div className="h-1 w-full overflow-hidden rounded-full bg-stone-800">
+                <div className="h-full rounded-full bg-purple-500" style={{ width: `${xpPct}%` }} />
+              </div>
             </div>
           </div>
         </header>
@@ -133,7 +139,7 @@ export function Shell({ children }: { children: ReactNode }) {
                   ) : null}
                   {bagBadge ? (
                     <span
-                      className={`absolute -right-3 -top-1.5 flex min-w-[1.1rem] items-center justify-center rounded-full px-1 text-[10px] leading-4 ${
+                      className={`absolute -right-3 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] leading-4 ${
                         bagFull ? 'bg-red-500 text-white' : 'bg-amber-400 text-stone-900'
                       }`}
                       title={bagFull ? 'Bag full' : `${newBagCount} new`}
@@ -219,15 +225,11 @@ function LevelBurst({ level, onDone }: { level: number; onDone: () => void }) {
 
 function BagFullGlyph() {
   return (
-    <svg viewBox="0 0 12 12" className="h-2.5 w-2.5" aria-hidden="true">
+    <svg viewBox="0 0 8 12" className="h-2.5 w-2" aria-hidden="true">
       <path
-        d="M3.5 4.5V3.2a2.5 2.5 0 0 1 5 0v1.3M2.5 4.5h7l.6 6H1.9l.6-6Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.3"
-        strokeLinejoin="round"
+        fill="currentColor"
+        d="M2.65.7h2.7c.28 0 .48.26.43.54L4.95 7.05a.95.95 0 0 1-1.9 0L2.22 1.24c-.05-.28.15-.54.43-.54ZM4 11.35a1.3 1.3 0 1 1 0-2.6 1.3 1.3 0 0 1 0 2.6Z"
       />
-      <path d="M4 7.5h4M6 5.5v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
   )
 }
@@ -276,6 +278,50 @@ function TabIcon({ id }: { id: (typeof tabs)[number]['id'] }) {
       <circle cx="18" cy="6" r="2" />
       <path d="M7.5 16.5c1.5-2 1.5-4 0-6s.5-4 3-3 3.5 0 5.5-1" />
       <path d="m17 13 .8 1.7L20 15l-1.5 1.4.4 2.1-1.9-1-1.9 1 .4-2.1L14 15l2.2-.3L17 13Z" />
+    </svg>
+  )
+}
+
+function GoldIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+      <circle cx="8" cy="8" r="6.25" fill="currentColor" />
+      <circle cx="8" cy="8" r="4.2" fill="#1c1917" fillOpacity="0.22" />
+      <circle cx="8" cy="8" r="4.2" fill="none" stroke="#1c1917" strokeOpacity="0.4" strokeWidth="0.9" />
+      <path
+        d="M5.1 5.15a3.4 3.4 0 0 1 3.2-1.15"
+        fill="none"
+        stroke="#fffbeb"
+        strokeOpacity="0.7"
+        strokeWidth="0.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  )
+}
+
+function DiamondIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+      <path d="M8 1.25 13.45 6.05 8 14.75 2.55 6.05Z" fill="currentColor" />
+      <path
+        d="M2.55 6.05h10.9M5.1 6.05 8 1.25 10.9 6.05M5.45 6.05 8 14.75 10.55 6.05"
+        fill="none"
+        stroke="#1c1917"
+        strokeOpacity="0.45"
+        strokeWidth="0.75"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function ScrapIcon() {
+  return (
+    <svg viewBox="0 0 16 16" className="h-3.5 w-3.5 shrink-0" aria-hidden="true">
+      <path fill="currentColor" fillOpacity="0.55" d="M3.2 2.4h7.6l1.7 2.15H4.9Z" />
+      <path fill="currentColor" d="M1.5 7.15 3.7 4.85h9.1l2.2 2.3-2.2 2.45H3.7Z" />
+      <path fill="currentColor" fillOpacity="0.75" d="M4.4 11.35h6.8l1.35 1.7H5.75Z" />
     </svg>
   )
 }

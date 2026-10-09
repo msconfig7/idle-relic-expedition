@@ -1,4 +1,4 @@
-export const CONTENT_VERSION = 1
+export const CONTENT_VERSION = 2
 export const REALM_PROGRESS_CAP = 10_000
 export const TICK_MS = 125
 export const PERSIST_MS = 12_000
@@ -98,7 +98,7 @@ export const STAT_HELP: Record<StatKey, string> = {
   xpMod: 'Multiplies XP gained from kills.',
   goldMod: 'Multiplies gold gained from kills.',
   itemDrop: 'Chance a kill drops gear.',
-  materialDrop: 'Chance a kill drops scrap.',
+  materialDrop: 'Chance a kill drops scrap and that monster\'s essence.',
   hpRegen: 'HP recovered per second in combat. Kills do not refill life.',
   lifeSteal: 'Percent of damage dealt returned as HP.',
 }
@@ -108,6 +108,15 @@ export type Affix = {
   value: number
 }
 
+export type ItemMod = {
+  stat: StatKey
+  value: number
+  name: string
+}
+
+export const MAX_ITEM_RANK = 10
+export const RANK_STAT_BONUS = 0.08
+
 export type Item = {
   id: string
   playerId: string
@@ -116,10 +125,17 @@ export type Item = {
   rarity: Rarity
   baseId: string
   name: string
-  affixes: Affix[]
+  implicit: ItemMod
+  prefixes: ItemMod[]
+  suffixes: ItemMod[]
+  special: ItemMod | null
+  rank: number
+  forgePity: number
   equippedSlot: EquipSlot | null
   locked: boolean
 }
+
+export type EssenceCounts = Record<string, number>
 
 export type PlayerState = {
   id: string
@@ -128,6 +144,7 @@ export type PlayerState = {
   gold: number
   diamonds: number
   scrap: number
+  essences: EssenceCounts
   realmId: number
   highestRealmId: number
   realmProgress: number
@@ -230,6 +247,7 @@ export type KillReward = {
   xp: number
   gold: number
   scrap: number
+  essenceId: string | null
   item: Item | null
   leveled: boolean
   newLevel: number

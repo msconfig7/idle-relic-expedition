@@ -1,10 +1,17 @@
 import { skillTree } from '../content/skillTree'
 import { equippedItems } from './equipment'
-import type { Affix, DerivedStats, Item, PlayerState, StatKey } from './types'
+import { scaleModValue } from './items'
+import type { Affix, DerivedStats, Item, ItemMod, PlayerState, StatKey } from './types'
 
 function addAffixes(stats: DerivedStats, affixes: Affix[]): void {
   for (const affix of affixes) {
     stats[affix.stat] += affix.value
+  }
+}
+
+function addScaled(stats: DerivedStats, mods: ItemMod[], rank: number, special: boolean): void {
+  for (const mod of mods) {
+    stats[mod.stat] += scaleModValue(mod.value, rank, special, mod.stat)
   }
 }
 
@@ -31,7 +38,8 @@ export function baseStats(level: number): DerivedStats {
 export function deriveStats(player: PlayerState, items: Item[]): DerivedStats {
   const stats = baseStats(player.level)
   for (const item of equippedItems(items)) {
-    addAffixes(stats, item.affixes)
+    addScaled(stats, [item.implicit, ...item.prefixes, ...item.suffixes], item.rank, false)
+    if (item.special) addScaled(stats, [item.special], item.rank, true)
   }
   for (const nodeId of player.allocatedNodeIds) {
     const node = skillTree.byId.get(nodeId)

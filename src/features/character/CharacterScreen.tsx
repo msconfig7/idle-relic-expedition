@@ -3,6 +3,7 @@ import { canEquip, equippedInSlot, mainIsTwoHanded } from '../../game'
 import { RARITY_CLASS } from '../../game/rarity'
 import type { Item } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
+import { ForgeModal } from '../craft/ForgeModal'
 import { ItemCard, slotLabel } from '../items/ItemCard'
 import { SLOT_ICON, slotIconForEquip } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
@@ -27,6 +28,7 @@ export function CharacterScreen() {
   const twoHand = mainIsTwoHanded(items)
   const selected = items.find((item) => item.id === selectedItemId)
   const [helpStat, setHelpStat] = useState<StatKey | null>(null)
+  const [forgeItemId, setForgeItemId] = useState<string | null>(null)
   const helpBoxRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -115,6 +117,13 @@ export function CharacterScreen() {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
+              className="rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
+              onClick={() => setForgeItemId(selected.id)}
+            >
+              Forge
+            </button>
+            <button
+              type="button"
               className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm"
               onClick={() => {
                 unequip(selected.id)
@@ -126,6 +135,7 @@ export function CharacterScreen() {
           </div>
         </Modal>
       )}
+      {forgeItemId && <ForgeModal itemId={forgeItemId} onClose={() => setForgeItemId(null)} />}
     </div>
   )
 }

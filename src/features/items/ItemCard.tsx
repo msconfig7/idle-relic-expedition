@@ -1,4 +1,5 @@
 import { formatAffix, isPercentStat } from '../../game/format'
+import { listItemMods, modTotal } from '../../game/items'
 import { RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
 import type { EquipSlot, Item, SlotType, StatKey, WeaponHand } from '../../game/types'
 import { equippedInSlot } from '../../game/equipment'
@@ -33,11 +34,15 @@ export function ItemCard({
         {item.weaponHand ? ` · ${HAND_LABEL[item.weaponHand]}` : ''}
         {item.equippedSlot ? ' · equipped' : ''}
       </p>
-      <ul className="mt-2 space-y-0.5 text-xs text-stone-300">
-        {item.affixes.map((affix, i) => (
-          <li key={`${affix.stat}-${i}`}>
-            {formatAffix(affix)}
-            {targets && compareDeltas(affix.stat, item, targets)}
+      <ul className="mt-2 space-y-0.5 text-xs">
+        {listItemMods(item).map((mod) => (
+          <li
+            key={`${mod.kind}-${mod.index}`}
+            className={mod.name === 'T1' ? 'text-amber-200' : MOD_CLASS[mod.kind]}
+          >
+            {mod.kind !== 'implicit' && <span className="font-medium">{mod.name} · </span>}
+            {formatAffix({ stat: mod.stat, value: mod.value })}
+            {targets && compareDeltas(mod.stat, item, targets)}
           </li>
         ))}
       </ul>
@@ -67,8 +72,15 @@ function compareDeltas(
   return parts.length ? parts : null
 }
 
+const MOD_CLASS = {
+  implicit: 'text-stone-300',
+  prefix: 'text-sky-300',
+  suffix: 'text-emerald-300',
+  special: 'text-amber-200',
+} as const
+
 function statTotal(item: Item, stat: StatKey): number {
-  return item.affixes.filter((x) => x.stat === stat).reduce((s, x) => s + x.value, 0)
+  return modTotal(item, stat)
 }
 
 function formatDelta(stat: StatKey, item: Item, equipped: Item): string | null {

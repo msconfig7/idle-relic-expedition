@@ -1,7 +1,7 @@
 import { getRealm, huntIndex } from '../game/combat'
 import { createPlayer } from '../game/player'
 import { settleOffline } from '../game/offline'
-import { normalizeRarity } from '../game/rarity'
+import { normalizeItem } from '../game/items'
 import type { Item, OfflineGrant, PlayerState } from '../game/types'
 import { itemFromRow, itemToRow, playerFromRow, playerToRow, type ItemRow, type PlayerRow } from './mappers'
 import { supabase, supabaseConfigured } from './supabase'
@@ -19,18 +19,14 @@ function readLocal(): SaveBlob | null {
     const monsterIndex = huntIndex(realm, parsed.player.monsterIndex)
     const player = {
       ...parsed.player,
+      essences: parsed.player.essences ?? {},
       highestRealmId: Math.max(parsed.player.highestRealmId ?? parsed.player.realmId, parsed.player.realmId),
       monsterIndex,
       queuedMonsterIndex: huntIndex(realm, parsed.player.queuedMonsterIndex ?? monsterIndex),
     }
-    const items = parsed.items.map((item) => {
-      const rarity = normalizeRarity(String(item.rarity))
-      return {
-        ...item,
-        rarity,
-        name: item.name.replace(/^Uncommon /, 'Magic '),
-      }
-    }) as Item[]
+    const items = parsed.items
+      .map((item) => normalizeItem(item))
+      .filter((item): item is Item => item !== null)
     return { player, items }
   } catch {
     return null

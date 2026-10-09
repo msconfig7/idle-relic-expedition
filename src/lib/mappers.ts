@@ -1,11 +1,18 @@
 import { z } from 'zod'
-import type { Affix, EquipSlot, Item, PlayerState, Rarity, SlotType, WeaponHand } from '../game/types'
+import type { EquipSlot, EssenceCounts, Item, ItemMod, PlayerState, Rarity, SlotType, WeaponHand } from '../game/types'
 import { getRealm, huntIndex } from '../game/combat'
+import { normalizeItem } from '../game/items'
 import { EQUIP_SLOTS, RARITIES, SLOT_TYPES, STAT_KEYS, WEAPON_HANDS } from '../game/types'
 
 export const affixSchema = z.object({
   stat: z.enum(STAT_KEYS),
   value: z.number(),
+})
+
+export const itemModSchema = z.object({
+  stat: z.enum(STAT_KEYS),
+  value: z.number(),
+  name: z.string(),
 })
 
 export const itemSchema = z.object({
@@ -16,7 +23,12 @@ export const itemSchema = z.object({
   rarity: z.preprocess((value) => (value === 'uncommon' ? 'magic' : value), z.enum(RARITIES)),
   baseId: z.string(),
   name: z.string(),
-  affixes: z.array(affixSchema),
+  implicit: itemModSchema,
+  prefixes: z.array(itemModSchema),
+  suffixes: z.array(itemModSchema),
+  special: itemModSchema.nullable(),
+  rank: z.number().int().min(0).max(10),
+  forgePity: z.number().int().nonnegative(),
   equippedSlot: z.enum(EQUIP_SLOTS).nullable(),
   locked: z.boolean(),
 })
@@ -28,6 +40,7 @@ export const playerSchema = z.object({
   gold: z.number().int().nonnegative(),
   diamonds: z.number().int().nonnegative(),
   scrap: z.number().int().nonnegative(),
+  essences: z.record(z.string(), z.number().int().nonnegative()).optional(),
   realmId: z.number().int().positive(),
   highestRealmId: z.number().int().positive().optional(),
   realmProgress: z.number().int().min(0).max(10_000),
@@ -46,6 +59,7 @@ export type PlayerRow = {
   gold: number
   diamonds: number
   scrap: number
+  essences?: EssenceCounts
   realm_id: number
   realm_progress: number
   monster_index?: number
@@ -65,7 +79,13 @@ export type ItemRow = {
   rarity: Rarity
   base_id: string
   name: string
-  affixes: Affix[]
+  affixes?: { stat: ItemMod['stat']; value: number }[]
+  implicit?: ItemMod | null
+  prefixes?: ItemMod[]
+  suffixes?: ItemMod[]
+  special?: ItemMod | null
+  rank?: number
+  forge_pity?: number
   equipped_slot: EquipSlot | null
   locked: boolean
 }
@@ -78,6 +98,7 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     gold: Number(row.gold),
     diamonds: Number(row.diamonds),
     scrap: Number(row.scrap),
+    essences: row.essences ?? {},
     realmId: row.realm_id,
     highestRealmId: row.highest_realm_id ?? row.realm_id,
     realmProgress: row.realm_progress,
@@ -92,6 +113,7 @@ export function playerFromRow(row: PlayerRow): PlayerState {
   const monsterIndex = huntIndex(realm, parsed.monsterIndex)
   return {
     ...parsed,
+    essences: parsed.essences ?? {},
     highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId),
     monsterIndex,
     queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
@@ -106,6 +128,7 @@ export function playerToRow(player: PlayerState): PlayerRow {
     gold: player.gold,
     diamonds: player.diamonds,
     scrap: player.scrap,
+    essences: player.essences ?? {},
     realm_id: player.realmId,
     highest_realm_id: player.highestRealmId,
     realm_progress: player.realmProgress,
@@ -118,19 +141,35 @@ export function playerToRow(player: PlayerState): PlayerRow {
   }
 }
 
+function flatAffixes(item: Item): { stat: ItemMod['stat']; value: number }[] {
+  return [item.implicit, ...item.prefixes, ...item.suffixes, ...(item.special ? [item.special] : [])].map(
+    (mod) => ({ stat: mod.stat, value: mod.value }),
+  )
+}
+
 export function itemFromRow(row: ItemRow): Item {
-  return itemSchema.parse({
+  const normalized = normalizeItem({
     id: row.id,
     playerId: row.player_id,
     slotType: row.slot_type,
     weaponHand: row.weapon_hand,
     rarity: row.rarity,
     baseId: row.base_id,
-    name: row.name.replace(/^Uncommon /, 'Magic '),
+    name: row.name,
     affixes: row.affixes,
+    implicit: row.implicit,
+    prefixes: row.prefixes,
+    suffixes: row.suffixes,
+    special: row.special,
+    rank: row.rank,
+    forgePity: row.forge_pity,
     equippedSlot: row.equipped_slot,
     locked: row.locked,
   })
+  if (!normalized) {
+    throw new Error(`Invalid item ${row.id}`)
+  }
+  return itemSchema.parse(normalized)
 }
 
 export function itemToRow(item: Item): ItemRow {
@@ -142,7 +181,13 @@ export function itemToRow(item: Item): ItemRow {
     rarity: item.rarity,
     base_id: item.baseId,
     name: item.name,
-    affixes: item.affixes,
+    affixes: flatAffixes(item),
+    implicit: item.implicit,
+    prefixes: item.prefixes,
+    suffixes: item.suffixes,
+    special: item.special,
+    rank: item.rank,
+    forge_pity: item.forgePity,
     equipped_slot: item.equippedSlot,
     locked: item.locked,
   }

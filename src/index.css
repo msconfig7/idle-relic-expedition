@@ -234,3 +234,119 @@ textarea {
   animation: level-label 2600ms ease-out forwards;
   text-shadow: 0 0 18px rgba(251, 191, 36, 0.85);
 }
+
+.forge-stage {
+  position: relative;
+  display: grid;
+  min-height: 5.5rem;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 0.9rem;
+  background: radial-gradient(circle at 50% 70%, #7c2d12 0%, #1c1917 62%);
+}
+
+.forge-ember {
+  position: absolute;
+  inset: 18% 28%;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(251, 146, 60, 0.9), rgba(251, 146, 60, 0) 70%);
+  opacity: 0.45;
+}
+
+.forge-hammer {
+  position: absolute;
+  top: 0.35rem;
+  right: 1.4rem;
+  transform-origin: 80% 20%;
+}
+
+.forge-stage-forging .forge-ember {
+  animation: forge-glow 1500ms ease-in-out;
+}
+
+.forge-stage-forging .forge-hammer {
+  animation: forge-hammer 1500ms ease-in-out;
+}
+
+.forge-stage-fail {
+  animation: forge-shake 480ms ease-in-out;
+}
+
+.forge-flash,
+.forge-crack {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.forge-flash {
+  background: radial-gradient(circle, rgba(254, 243, 199, 0.85), rgba(251, 191, 36, 0) 68%);
+  animation: forge-burst 700ms ease-out;
+}
+
+.forge-crack {
+  background: radial-gradient(circle, rgba(127, 29, 29, 0.55), rgba(127, 29, 29, 0) 70%);
+  animation: forge-burst 700ms ease-out;
+}
+
+@keyframes forge-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.92);
+  }
+  16%,
+  48%,
+  78% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes forge-hammer {
+  0%,
+  22%,
+  54%,
+  100% {
+    transform: translateY(0) rotate(-16deg);
+  }
+  12%,
+  42%,
+  72% {
+    transform: translateY(11px) rotate(10deg);
+  }
+}
+
+@keyframes forge-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-5px);
+  }
+  40% {
+    transform: translateX(5px);
+  }
+  60% {
+    transform: translateX(-3px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+@keyframes forge-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}

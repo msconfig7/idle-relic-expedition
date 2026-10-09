@@ -9,6 +9,7 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
     gold: 0,
     diamonds: STARTING_DIAMONDS,
     scrap: 0,
+    essences: {},
     realmId: 1,
     highestRealmId: 1,
     realmProgress: 0,

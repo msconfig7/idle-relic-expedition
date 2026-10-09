@@ -1,7 +1,8 @@
+import { essenceDef } from '../content/essences'
 import { rollItemDrop, rollScrap } from './drops'
 import { grantXp } from './xp'
 import { nextRealm } from './combat'
-import type { DerivedStats, Item, KillReward, LiveMonster, PlayerState } from './types'
+import type { DerivedStats, EssenceCounts, Item, KillReward, LiveMonster, PlayerState } from './types'
 import { MAX_INVENTORY, REALM_PROGRESS_CAP } from './types'
 
 export function applyKill(
@@ -14,6 +15,11 @@ export function applyKill(
   const xpGain = Math.max(1, Math.floor(monster.def.xp * stats.xpMod))
   const goldGain = Math.max(1, Math.floor(monster.def.gold * stats.goldMod))
   const scrap = rollScrap(rng, monster.def.materialDrop * (stats.materialDrop / 0.18), player.realmId)
+  const essenceId = scrap > 0 && essenceDef(monster.def.id) ? monster.def.id : null
+  const currentEssences = player.essences ?? {}
+  const essences: EssenceCounts = essenceId
+    ? { ...currentEssences, [essenceId]: (currentEssences[essenceId] ?? 0) + 1 }
+    : currentEssences
   const itemChance = monster.def.itemDrop * (stats.itemDrop / 0.08)
   const bagCount = items.filter((entry) => !entry.equippedSlot).length
   const item =
@@ -36,6 +42,7 @@ export function applyKill(
     skillPointsUnspent: leveled.skillPointsUnspent,
     gold: player.gold + goldGain,
     scrap: player.scrap + scrap,
+    essences,
     realmProgress: nextProgress,
     highestRealmId,
   }
@@ -46,6 +53,7 @@ export function applyKill(
       xp: xpGain,
       gold: goldGain,
       scrap,
+      essenceId,
       item,
       leveled: leveled.leveled,
       newLevel: leveled.level,

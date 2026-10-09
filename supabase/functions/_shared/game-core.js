@@ -251,6 +251,7 @@ var STAT_KEYS = [
 	"hpRegen",
 	"lifeSteal"
 ];
+var RANK_STAT_BONUS = .08;
 //#endregion
 //#region src/game/combat.ts
 function getRealm(realmId) {
@@ -276,6 +277,83 @@ function averageTimeToKillMs(playerAttack, playerCritChance, playerCritMulti, mo
 function averageRealmTimeToKillMs(realm, playerAttack, critChance, critMulti, swingMs) {
 	const times = realm.monsters.map((monster) => averageTimeToKillMs(playerAttack, critChance, critMulti, monster.hp, monster.defense, swingMs));
 	return times.reduce((a, b) => a + b, 0) / times.length;
+}
+var byId = new Map([
+	{
+		id: "dust-mite",
+		name: "Dust Mote",
+		monster: "Dust Mite",
+		realmId: 1
+	},
+	{
+		id: "road-gnoll",
+		name: "Gnoll Fang",
+		monster: "Road Gnoll",
+		realmId: 1
+	},
+	{
+		id: "lost-shade",
+		name: "Shade Ichor",
+		monster: "Lost Shade",
+		realmId: 1
+	},
+	{
+		id: "waystone-brute",
+		name: "Brute Core",
+		monster: "Waystone Brute",
+		realmId: 1
+	},
+	{
+		id: "bone-crawler",
+		name: "Crawler Bone",
+		monster: "Bone Crawler",
+		realmId: 2
+	},
+	{
+		id: "drowned-acolyte",
+		name: "Drowned Salt",
+		monster: "Drowned Acolyte",
+		realmId: 2
+	},
+	{
+		id: "crypt-guard",
+		name: "Crypt Seal",
+		monster: "Crypt Guard",
+		realmId: 2
+	},
+	{
+		id: "vault-wraith",
+		name: "Wraith Ash",
+		monster: "Vault Wraith",
+		realmId: 2
+	},
+	{
+		id: "cinder-wolf",
+		name: "Cinder Ash",
+		monster: "Cinder Wolf",
+		realmId: 3
+	},
+	{
+		id: "magma-scarab",
+		name: "Scarab Carapace",
+		monster: "Magma Scarab",
+		realmId: 3
+	},
+	{
+		id: "peak-raider",
+		name: "Raider Iron",
+		monster: "Peak Raider",
+		realmId: 3
+	},
+	{
+		id: "ember-tyrant",
+		name: "Tyrant Ember",
+		monster: "Ember Tyrant",
+		realmId: 3
+	}
+].map((entry) => [entry.id, entry]));
+function essenceDef(id) {
+	return byId.get(id);
 }
 //#endregion
 //#region src/content/items.ts
@@ -492,6 +570,240 @@ var itemBases = [
 	}
 ];
 //#endregion
+//#region src/content/mods.ts
+var PREFIX_STATS = [
+	"attack",
+	"str",
+	"critChance",
+	"critMulti",
+	"lifeSteal",
+	"itemDrop"
+];
+var SUFFIX_STATS = [
+	"hp",
+	"defense",
+	"dex",
+	"int",
+	"block",
+	"hpRegen",
+	"xpMod",
+	"goldMod",
+	"materialDrop"
+];
+var TIER_VALUES = {
+	attack: [
+		15,
+		10,
+		7,
+		5,
+		3
+	],
+	str: [
+		8,
+		5,
+		4,
+		3,
+		2
+	],
+	dex: [
+		8,
+		5,
+		4,
+		3,
+		2
+	],
+	int: [
+		8,
+		5,
+		4,
+		3,
+		2
+	],
+	hp: [
+		40,
+		26,
+		18,
+		12,
+		8
+	],
+	defense: [
+		12,
+		8,
+		6,
+		4,
+		2
+	],
+	hpRegen: [
+		1.2,
+		.8,
+		.5,
+		.3,
+		.15
+	],
+	critChance: [
+		.08,
+		.05,
+		.035,
+		.02,
+		.01
+	],
+	critMulti: [
+		.2,
+		.12,
+		.08,
+		.05,
+		.03
+	],
+	block: [
+		.08,
+		.05,
+		.035,
+		.02,
+		.01
+	],
+	lifeSteal: [
+		.06,
+		.04,
+		.025,
+		.015,
+		.008
+	],
+	itemDrop: [
+		.08,
+		.05,
+		.03,
+		.02,
+		.01
+	],
+	materialDrop: [
+		.08,
+		.05,
+		.03,
+		.02,
+		.01
+	],
+	xpMod: [
+		.12,
+		.08,
+		.05,
+		.03,
+		.02
+	],
+	goldMod: [
+		.12,
+		.08,
+		.05,
+		.03,
+		.02
+	]
+};
+var TIER_WEIGHT = {
+	1: 4,
+	2: 12,
+	3: 26,
+	4: 30,
+	5: 28
+};
+function tierName(tier) {
+	return `T${tier}`;
+}
+function tierValue(stat, tier) {
+	return TIER_VALUES[stat][tier - 1];
+}
+function tiersForRarity(rarity) {
+	if (rarity === "common") return [
+		3,
+		4,
+		5
+	];
+	if (rarity === "magic") return [
+		2,
+		3,
+		4,
+		5
+	];
+	return [
+		1,
+		2,
+		3,
+		4,
+		5
+	];
+}
+function rollTier(rng, rarity) {
+	const entries = tiersForRarity(rarity).map((tier) => ({
+		tier,
+		weight: TIER_WEIGHT[tier]
+	}));
+	const total = entries.reduce((sum, entry) => sum + entry.weight, 0);
+	let roll = rng() * total;
+	for (const entry of entries) {
+		roll -= entry.weight;
+		if (roll <= 0) return entry.tier;
+	}
+	return entries[entries.length - 1].tier;
+}
+function closestTier(stat, value, rarity) {
+	const allowed = tiersForRarity(rarity);
+	let best = allowed[0];
+	let bestDist = Infinity;
+	for (const tier of allowed) {
+		const dist = Math.abs(tierValue(stat, tier) - value);
+		if (dist < bestDist) {
+			best = tier;
+			bestDist = dist;
+		}
+	}
+	return best;
+}
+function parseTier(name) {
+	const match = /^T([1-5])$/.exec(name);
+	if (!match) return null;
+	return Number(match[1]);
+}
+var SPECIALS = [
+	{
+		stat: "attack",
+		name: "Titan's Grip",
+		value: 22
+	},
+	{
+		stat: "defense",
+		name: "Warden's Oath",
+		value: 18
+	},
+	{
+		stat: "lifeSteal",
+		name: "Emberheart",
+		value: .09
+	},
+	{
+		stat: "itemDrop",
+		name: "Relic Sense",
+		value: .12
+	},
+	{
+		stat: "xpMod",
+		name: "Scholar's Mark",
+		value: .18
+	},
+	{
+		stat: "goldMod",
+		name: "Midas Touch",
+		value: .18
+	},
+	{
+		stat: "hpRegen",
+		name: "Second Wind",
+		value: 1.8
+	},
+	{
+		stat: "critMulti",
+		name: "Executioner",
+		value: .3
+	}
+];
+//#endregion
 //#region src/game/rng.ts
 function mulberry32(seed) {
 	let a = seed >>> 0;
@@ -535,13 +847,174 @@ function isPercentStat(stat) {
 }
 //#endregion
 //#region src/game/rarity.ts
-var RARITY_LABEL = {
-	common: "Common",
-	magic: "Magic",
-	rare: "Rare",
-	epic: "Epic",
-	legendary: "Legendary"
-};
+function normalizeRarity(value) {
+	if (value === "uncommon") return "magic";
+	return value;
+}
+//#endregion
+//#region src/game/items.ts
+function modCap(rarity) {
+	if (rarity === "common") return {
+		prefixes: 1,
+		suffixes: 1
+	};
+	if (rarity === "magic") return {
+		prefixes: 2,
+		suffixes: 2
+	};
+	return {
+		prefixes: 3,
+		suffixes: 3
+	};
+}
+function specialRoll(rarity) {
+	if (rarity === "rare") return "chance";
+	if (rarity === "epic" || rarity === "legendary") return "always";
+	return "never";
+}
+function composeItemName(baseName, rank) {
+	return rank > 0 ? `${baseName} +${rank}` : baseName;
+}
+function baseItemName(baseId, fallback = "Relic") {
+	return itemBases.find((entry) => entry.id === baseId)?.name ?? fallback;
+}
+function withItemName(item) {
+	return {
+		...item,
+		name: composeItemName(baseItemName(item.baseId, item.name), item.rank)
+	};
+}
+function scaleModValue(value, rank, special, stat) {
+	const scaled = special ? value : value * (1 + rank * RANK_STAT_BONUS);
+	if (isPercentStat(stat) || stat === "hpRegen") return Math.round(scaled * 1e3) / 1e3;
+	return Math.round(scaled * 10) / 10;
+}
+function rollFromPool(rng, pool, rarity, used) {
+	const choices = pool.filter((stat) => !used.has(stat));
+	const stat = choices[Math.floor(rng() * choices.length)] ?? pool[Math.floor(rng() * pool.length)] ?? pool[0];
+	used.add(stat);
+	const tier = rollTier(rng, rarity);
+	return {
+		stat,
+		name: tierName(tier),
+		value: tierValue(stat, tier)
+	};
+}
+function snapToTier(mod, rarity) {
+	const named = parseTier(mod.name);
+	const allowed = tiersForRarity(rarity);
+	const tier = named && allowed.includes(named) ? named : closestTier(mod.stat, mod.value, rarity);
+	return {
+		stat: mod.stat,
+		name: tierName(tier),
+		value: tierValue(mod.stat, tier)
+	};
+}
+var STAT_SET = new Set(STAT_KEYS);
+function asStat(value) {
+	return typeof value === "string" && STAT_SET.has(value) ? value : null;
+}
+function asMod(value, fallbackName) {
+	if (!value || typeof value !== "object") return null;
+	const raw = value;
+	const stat = asStat(raw.stat);
+	if (!stat || typeof raw.value !== "number" || !Number.isFinite(raw.value)) return null;
+	const name = typeof raw.name === "string" ? raw.name : fallbackName ?? "";
+	return {
+		stat,
+		value: raw.value,
+		name
+	};
+}
+function normalizeItem(value) {
+	if (!value || typeof value !== "object") return null;
+	const raw = value;
+	if (typeof raw.id !== "string") return null;
+	const rarity = normalizeRarity(String(raw.rarity ?? "common"));
+	const baseId = String(raw.baseId ?? raw.base_id ?? "");
+	const base = itemBases.find((entry) => entry.id === baseId);
+	const slotType = raw.slotType ?? raw.slot_type ?? base?.slotType;
+	const weaponHand = raw.weaponHand ?? raw.weapon_hand ?? base?.weaponHand ?? null;
+	const equippedSlot = raw.equippedSlot ?? raw.equipped_slot ?? null;
+	const playerId = String(raw.playerId ?? raw.player_id ?? "");
+	if (raw.implicit && typeof raw.implicit === "object") {
+		const implicit = asMod(raw.implicit, "");
+		if (!implicit) return null;
+		const prefixes = Array.isArray(raw.prefixes) ? raw.prefixes.map((entry) => asMod(entry)).filter((entry) => entry !== null).map((entry) => snapToTier(entry, rarity)) : [];
+		const suffixes = Array.isArray(raw.suffixes) ? raw.suffixes.map((entry) => asMod(entry)).filter((entry) => entry !== null).map((entry) => snapToTier(entry, rarity)) : [];
+		const special = raw.special == null ? null : asMod(raw.special);
+		const rank = Math.max(0, Math.min(10, Math.floor(Number(raw.rank ?? 0)) || 0));
+		const forgePity = Math.max(0, Math.floor(Number(raw.forgePity ?? raw.forge_pity ?? 0)) || 0);
+		return withItemName({
+			id: raw.id,
+			playerId,
+			slotType,
+			weaponHand,
+			rarity,
+			baseId,
+			name: typeof raw.name === "string" ? raw.name : baseItemName(baseId),
+			implicit,
+			prefixes,
+			suffixes,
+			special,
+			rank,
+			forgePity,
+			equippedSlot,
+			locked: Boolean(raw.locked)
+		});
+	}
+	const legacy = Array.isArray(raw.affixes) ? raw.affixes : [];
+	const first = asMod(legacy[0]);
+	const implicit = first ? {
+		...first,
+		name: ""
+	} : {
+		stat: base?.implicit.stat ?? "attack",
+		value: base?.implicit.value ?? 1,
+		name: ""
+	};
+	const cap = modCap(rarity);
+	const prefixes = [];
+	const suffixes = [];
+	for (const entry of legacy.slice(1)) {
+		const mod = asMod(entry);
+		if (!mod) continue;
+		const prefixStat = PREFIX_STATS.includes(mod.stat);
+		const suffixStat = SUFFIX_STATS.includes(mod.stat);
+		if (prefixStat && prefixes.length < cap.prefixes) prefixes.push(snapToTier(mod, rarity));
+		else if (suffixStat && suffixes.length < cap.suffixes) suffixes.push(snapToTier(mod, rarity));
+		else if (prefixes.length < cap.prefixes) prefixes.push(snapToTier(mod, rarity));
+		else if (suffixes.length < cap.suffixes) suffixes.push(snapToTier(mod, rarity));
+	}
+	return withItemName({
+		id: raw.id,
+		playerId,
+		slotType,
+		weaponHand,
+		rarity,
+		baseId,
+		name: baseItemName(baseId),
+		implicit,
+		prefixes,
+		suffixes,
+		special: null,
+		rank: 0,
+		forgePity: 0,
+		equippedSlot,
+		locked: Boolean(raw.locked)
+	});
+}
+function rollSpecial(rng, rarity) {
+	const mode = specialRoll(rarity);
+	if (mode === "never") return null;
+	if (mode === "chance" && rng() >= .2) return null;
+	const pick = SPECIALS[Math.floor(rng() * SPECIALS.length)] ?? SPECIALS[0];
+	return {
+		stat: pick.stat,
+		name: pick.name,
+		value: pick.value
+	};
+}
 //#endregion
 //#region src/lib/id.ts
 function newId() {
@@ -554,82 +1027,6 @@ function newId() {
 }
 //#endregion
 //#region src/game/drops.ts
-var affixCount = {
-	common: 1,
-	magic: 2,
-	rare: 3,
-	epic: 4,
-	legendary: 5
-};
-var pool = [
-	{
-		stat: "hp",
-		kind: "flat"
-	},
-	{
-		stat: "attack",
-		kind: "flat"
-	},
-	{
-		stat: "defense",
-		kind: "flat"
-	},
-	{
-		stat: "str",
-		kind: "flat"
-	},
-	{
-		stat: "dex",
-		kind: "flat"
-	},
-	{
-		stat: "int",
-		kind: "flat"
-	},
-	{
-		stat: "critChance",
-		kind: "pct"
-	},
-	{
-		stat: "critMulti",
-		kind: "pct"
-	},
-	{
-		stat: "block",
-		kind: "pct"
-	},
-	{
-		stat: "xpMod",
-		kind: "pct"
-	},
-	{
-		stat: "goldMod",
-		kind: "pct"
-	},
-	{
-		stat: "itemDrop",
-		kind: "pct"
-	},
-	{
-		stat: "materialDrop",
-		kind: "pct"
-	},
-	{
-		stat: "hpRegen",
-		kind: "flat"
-	},
-	{
-		stat: "lifeSteal",
-		kind: "pct"
-	}
-];
-var rarityScale = {
-	common: 1,
-	magic: 1.25,
-	rare: 1.55,
-	epic: 2,
-	legendary: 2.7
-};
 function rarityWeights(realmId) {
 	if (realmId <= 1) return [
 		{
@@ -698,57 +1095,50 @@ function rarityWeights(realmId) {
 		}
 	];
 }
-function scaleImplicit(implicit, rarity, realmId) {
-	const scaled = implicit.value * rarityScale[rarity] * (1 + (realmId - 1) * .2);
-	if (isPercentStat(implicit.stat)) return Math.round(scaled * 1e3) / 1e3;
-	return Math.round(scaled * 10) / 10;
-}
-function rollAffix(rng, rarity, realmId, used) {
-	const choices = pool.filter((entry) => !used.has(entry.stat));
-	const pick = choices[Math.floor(rng() * choices.length)] ?? pool[0];
-	used.add(pick.stat);
-	const scale = rarityScale[rarity] * (1 + (realmId - 1) * .35);
-	if (pick.kind === "flat") {
-		if (pick.stat === "hpRegen") return {
-			stat: pick.stat,
-			value: Math.round(randInt(rng, 2, 6) * scale) / 10
-		};
-		const base = pick.stat === "hp" ? randInt(rng, 8, 22) : randInt(rng, 1, 6);
-		return {
-			stat: pick.stat,
-			value: Math.max(1, Math.round(base * scale))
-		};
-	}
-	const pct = pick.stat === "critMulti" || pick.stat === "xpMod" || pick.stat === "goldMod" ? randInt(rng, 3, 8) / 100 : randInt(rng, 1, 4) / 100;
+function implicitFor(base, rarity, realmId) {
+	const scaled = scaleModValue(base.implicit.value, 0, true, base.implicit.stat) * {
+		common: 1,
+		magic: 1.25,
+		rare: 1.55,
+		epic: 2,
+		legendary: 2.7
+	}[rarity] * (1 + (realmId - 1) * .2);
+	const rounded = base.implicit.stat === "hpRegen" || base.implicit.stat === "critChance" || base.implicit.stat === "critMulti" || base.implicit.stat === "block" || base.implicit.stat === "xpMod" || base.implicit.stat === "goldMod" || base.implicit.stat === "itemDrop" || base.implicit.stat === "materialDrop" || base.implicit.stat === "lifeSteal" ? Math.round(scaled * 1e3) / 1e3 : Math.round(scaled * 10) / 10;
 	return {
-		stat: pick.stat,
-		value: Math.round(pct * scale * 1e3) / 1e3
+		stat: base.implicit.stat,
+		value: rounded,
+		name: ""
 	};
 }
 function rollItemDrop(rng, playerId, realmId, itemChance) {
 	if (!chance(rng, itemChance)) return null;
 	const { rarity } = pickWeighted(rng, rarityWeights(realmId));
 	const base = itemBases[Math.floor(rng() * itemBases.length)];
-	const used = /* @__PURE__ */ new Set([base.implicit.stat]);
-	const affixes = [{
-		...base.implicit,
-		value: scaleImplicit(base.implicit, rarity, realmId)
-	}];
-	const extra = affixCount[rarity] - 1;
-	for (let i = 0; i < extra; i++) affixes.push(rollAffix(rng, rarity, realmId, used));
-	const prefix = rarity === "common" ? "" : `${RARITY_LABEL[rarity]} `;
-	return {
+	const implicit = implicitFor(base, rarity, realmId);
+	const used = /* @__PURE__ */ new Set([implicit.stat]);
+	const cap = modCap(rarity);
+	const prefixes = [];
+	const suffixes = [];
+	for (let i = 0; i < cap.prefixes; i++) prefixes.push(rollFromPool(rng, PREFIX_STATS, rarity, used));
+	for (let i = 0; i < cap.suffixes; i++) suffixes.push(rollFromPool(rng, SUFFIX_STATS, rarity, used));
+	const special = rollSpecial(rng, rarity);
+	return withItemName({
 		id: newId(),
 		playerId,
 		slotType: base.slotType,
 		weaponHand: base.weaponHand,
 		rarity,
 		baseId: base.id,
-		name: `${prefix}${base.name}`,
-		affixes,
+		name: base.name,
+		implicit,
+		prefixes,
+		suffixes,
+		special,
+		rank: 0,
+		forgePity: 0,
 		equippedSlot: null,
 		locked: false
-	};
+	});
 }
 function rollScrap(rng, materialChance, realmId) {
 	if (!chance(rng, materialChance)) return 0;
@@ -788,6 +1178,12 @@ function applyKill(player, items, monster, stats, rng) {
 	const xpGain = Math.max(1, Math.floor(monster.def.xp * stats.xpMod));
 	const goldGain = Math.max(1, Math.floor(monster.def.gold * stats.goldMod));
 	const scrap = rollScrap(rng, monster.def.materialDrop * (stats.materialDrop / .18), player.realmId);
+	const essenceId = scrap > 0 && essenceDef(monster.def.id) ? monster.def.id : null;
+	const currentEssences = player.essences ?? {};
+	const essences = essenceId ? {
+		...currentEssences,
+		[essenceId]: (currentEssences[essenceId] ?? 0) + 1
+	} : currentEssences;
 	const itemChance = monster.def.itemDrop * (stats.itemDrop / .08);
 	const item = items.filter((entry) => !entry.equippedSlot).length >= 30 ? null : rollItemDrop(rng, player.id, player.realmId, itemChance);
 	const leveled = grantXp(player.xp, player.level, player.skillPointsUnspent, xpGain);
@@ -807,6 +1203,7 @@ function applyKill(player, items, monster, stats, rng) {
 			skillPointsUnspent: leveled.skillPointsUnspent,
 			gold: player.gold + goldGain,
 			scrap: player.scrap + scrap,
+			essences,
 			realmProgress: nextProgress,
 			highestRealmId
 		},
@@ -815,6 +1212,7 @@ function applyKill(player, items, monster, stats, rng) {
 			xp: xpGain,
 			gold: goldGain,
 			scrap,
+			essenceId,
 			item,
 			leveled: leveled.leveled,
 			newLevel: leveled.level
@@ -1374,6 +1772,9 @@ function equippedItems(items) {
 function addAffixes(stats, affixes) {
 	for (const affix of affixes) stats[affix.stat] += affix.value;
 }
+function addScaled(stats, mods, rank, special) {
+	for (const mod of mods) stats[mod.stat] += scaleModValue(mod.value, rank, special, mod.stat);
+}
 function baseStats(level) {
 	return {
 		hp: 80 + level * 12,
@@ -1395,7 +1796,14 @@ function baseStats(level) {
 }
 function deriveStats(player, items) {
 	const stats = baseStats(player.level);
-	for (const item of equippedItems(items)) addAffixes(stats, item.affixes);
+	for (const item of equippedItems(items)) {
+		addScaled(stats, [
+			item.implicit,
+			...item.prefixes,
+			...item.suffixes
+		], item.rank, false);
+		if (item.special) addScaled(stats, [item.special], item.rank, true);
+	}
 	for (const nodeId of player.allocatedNodeIds) {
 		const node = skillTree.byId.get(nodeId);
 		if (node) addAffixes(stats, node.bonuses);
@@ -1432,7 +1840,7 @@ function settleOffline(player, items, nowMs) {
 		player: {
 			...player,
 			lastSettledAt: nowMs,
-			contentVersion: 1
+			contentVersion: 2
 		},
 		items,
 		kills: 0,
@@ -1469,7 +1877,7 @@ function settleOffline(player, items, nowMs) {
 	nextPlayer = {
 		...nextPlayer,
 		lastSettledAt: nowMs,
-		contentVersion: 1
+		contentVersion: 2
 	};
 	return {
 		player: nextPlayer,
@@ -2497,6 +2905,7 @@ function datetime(args) {
 	return new RegExp(`^${dateSource}T(?:${timeRegex})$`);
 }
 var anyString = /^[\s\S]{0,}$/;
+var integer = /^-?\d+$/;
 var number$1 = /^-?\d+(?:\.\d+)?$/;
 var boolean$1 = /^(?:true|false)$/i;
 var lowercase = /^[^A-Z]*$/;
@@ -3814,6 +4223,138 @@ function handleIntersectionResults(result, left, right) {
 	result.value = merged.data;
 	return result;
 }
+var $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
+	$ZodType.init(inst, def);
+	const memo = globalConfig.memoizer;
+	memo?.attach(inst);
+	inst._zod.parse = (payload, ctx) => {
+		const input = payload.value;
+		if (!isPlainObject(input)) {
+			payload.issues.push({
+				expected: "record",
+				code: "invalid_type",
+				input,
+				inst
+			});
+			return payload;
+		}
+		const proms = [];
+		const values = def.keyType._zod.values;
+		if (values && !def.partial) {
+			payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+			const recordKeys = /* @__PURE__ */ new Set();
+			for (const key of values) if (typeof key === "string" || typeof key === "number" || typeof key === "symbol") {
+				recordKeys.add(typeof key === "number" ? key.toString() : key);
+				if (key === "__proto__") continue;
+				const keyResult = def.keyType._zod.run({
+					value: key,
+					issues: []
+				}, ctx);
+				if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+				if (keyResult.issues.length) {
+					payload.issues.push({
+						code: "invalid_key",
+						origin: "record",
+						issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+						input: key,
+						path: [key],
+						inst
+					});
+					continue;
+				}
+				const outKey = keyResult.value;
+				if (outKey === "__proto__") continue;
+				const result = def.valueType._zod.run({
+					value: input[key],
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((result) => {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}));
+				else {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}
+			}
+			let unrecognized;
+			for (const key in input) if (!recordKeys.has(key)) {
+				if (def.mode === "loose") {
+					if (key === "__proto__") continue;
+					payload.value[key] = input[key];
+				} else {
+					unrecognized = unrecognized ?? [];
+					unrecognized.push(key);
+				}
+			}
+			if (unrecognized && unrecognized.length > 0) payload.issues.push({
+				code: "unrecognized_keys",
+				input,
+				inst,
+				keys: unrecognized,
+				continue: true
+			});
+		} else {
+			payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
+			let unrecognized;
+			for (const key of Reflect.ownKeys(input)) {
+				if (key === "__proto__") continue;
+				if (!Object.prototype.propertyIsEnumerable.call(input, key)) continue;
+				let keyResult = def.keyType._zod.run({
+					value: key,
+					issues: []
+				}, ctx);
+				if (keyResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+				if (typeof key === "string" && number$1.test(key) && keyResult.issues.length) {
+					const retryResult = def.keyType._zod.run({
+						value: Number(key),
+						issues: []
+					}, ctx);
+					if (retryResult instanceof Promise) throw new Error("Async schemas not supported in object keys currently");
+					if (retryResult.issues.length === 0) keyResult = retryResult;
+				}
+				if (keyResult.issues.length) {
+					if (def.mode === "loose") payload.value[key] = input[key];
+					else if (values) {
+						unrecognized = unrecognized ?? [];
+						unrecognized.push(key);
+					} else payload.issues.push({
+						code: "invalid_key",
+						origin: "record",
+						issues: keyResult.issues.map((iss) => finalizeIssue(iss, ctx, config())),
+						input: key,
+						path: [key],
+						inst
+					});
+					continue;
+				}
+				const outKey = keyResult.value;
+				if (outKey === "__proto__") continue;
+				const result = def.valueType._zod.run({
+					value: input[key],
+					issues: []
+				}, ctx);
+				if (result instanceof Promise) proms.push(result.then((result) => {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}));
+				else {
+					if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
+					payload.value[outKey] = result.value;
+				}
+			}
+			if (unrecognized && unrecognized.length > 0) payload.issues.push({
+				code: "unrecognized_keys",
+				input,
+				inst,
+				keys: unrecognized,
+				continue: true
+			});
+		}
+		if (proms.length) return Promise.all(proms).then(() => payload);
+		return payload;
+	};
+});
 var $ZodEnum = /*@__PURE__*/ $constructor("$ZodEnum", (inst, def) => {
 	$ZodType.init(inst, def);
 	const values = getEnumValues(def.entries);
@@ -5659,6 +6200,107 @@ var intersectionProcessor = (schema, ctx, json, params) => {
 	json.allOf = allOf;
 	ctx.intersections.push(allOf);
 };
+/** JSON object keys are always strings, so a numeric record key schema is re-expressed over the
+* numeric-string form the record parser matches. Deferred to `finalize`, after the flatten: a key
+* behind a wrapper only carries its own `type` before then, and a union key only has its branches.
+*
+* A numeric bound cannot apply to a property name, so `minimum` and its siblings are dropped rather
+* than carried over: keeping them beside `type: "string"` reproduces the match-nothing schema this
+* exists to fix. A key that carries one therefore emits wider than the record parses — `z.record(z.number().min(5), V)`
+* accepts `"3"` — which is the deliberate trade, since throwing on it would reject an ordinary schema
+* outright. */
+function stringifyKeyNames(bySchema, json, visited) {
+	if (json.$ref) {
+		if (visited.has(json)) return json;
+		visited.add(json);
+		const def = bySchema.get(json)?.def;
+		if (!def) return json;
+		const inlined = stringifyKeyNames(bySchema, def, visited);
+		return inlined === def ? json : inlined;
+	}
+	for (const keyword of ["anyOf", "oneOf"]) {
+		const branches = json[keyword];
+		if (!Array.isArray(branches)) continue;
+		const mapped = branches.map((branch) => stringifyKeyNames(bySchema, branch, visited));
+		if (mapped.some((branch, i) => branch !== branches[i])) json = {
+			...json,
+			[keyword]: mapped
+		};
+	}
+	const types = Array.isArray(json.type) ? json.type : [json.type];
+	const numericType = !types.includes("string") && types.some((t) => t === "number" || t === "integer");
+	const values = json.enum ?? (json.const !== void 0 ? [json.const] : void 0);
+	if (!numericType && !values?.some((v) => typeof v === "number")) return json;
+	const { minimum, maximum, exclusiveMinimum, exclusiveMaximum, multipleOf, format, id, ...rest } = json;
+	if (rest.enum) rest.enum = rest.enum.map((v) => typeof v === "number" ? String(v) : v);
+	else if (typeof rest.const === "number") rest.const = String(rest.const);
+	if (!numericType) return rest;
+	rest.type = "string";
+	if (!values) rest.pattern = (types.includes("number") ? number$1 : integer).source;
+	return rest;
+}
+/** Every record of one conversion, so the carriers are found in a single pass rather than once per record. */
+var pendingRecords = /* @__PURE__ */ new WeakMap();
+function rewriteKeyNames(ctx) {
+	const bySchema = /* @__PURE__ */ new Map();
+	for (const entry of ctx.seen.values()) if (entry.def && !bySchema.has(entry.schema)) bySchema.set(entry.schema, entry);
+	const rewrites = /* @__PURE__ */ new Map();
+	for (const record of pendingRecords.get(ctx) ?? []) {
+		const seen = ctx.seen.get(record);
+		const names = (seen?.def ?? seen?.schema)?.propertyNames;
+		if (!names || names === true || rewrites.has(names)) continue;
+		const rewritten = stringifyKeyNames(bySchema, names, /* @__PURE__ */ new Set());
+		if (rewritten !== names) rewrites.set(names, rewritten);
+	}
+	if (!rewrites.size) return;
+	for (const entry of ctx.seen.values()) for (const carrier of [entry.schema, entry.def]) {
+		const rewritten = carrier && rewrites.get(carrier.propertyNames);
+		if (rewritten) carrier.propertyNames = rewritten;
+	}
+}
+var recordProcessor = (schema, ctx, _json, params) => {
+	const json = _json;
+	const def = schema._zod.def;
+	json.type = "object";
+	const keyType = def.keyType;
+	const patterns = aggregateChecks(keyType).patterns;
+	if (def.mode === "loose" && patterns && patterns.size > 0) {
+		const valueSchema = processSchema(def.valueType, ctx, {
+			...params,
+			path: [
+				...params.path,
+				"patternProperties",
+				"*"
+			]
+		});
+		json.patternProperties = {};
+		for (const pattern of patterns) assignProp(json.patternProperties, exactPattern(pattern).source, valueSchema);
+	} else {
+		if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
+			json.propertyNames = processSchema(def.keyType, ctx, {
+				...params,
+				path: [...params.path, "propertyNames"]
+			});
+			let pending = pendingRecords.get(ctx);
+			if (!pending) {
+				pending = [];
+				pendingRecords.set(ctx, pending);
+				ctx.deferred.push(() => rewriteKeyNames(ctx));
+			}
+			pending.push(schema);
+		}
+		json.additionalProperties = processSchema(def.valueType, ctx, {
+			...params,
+			path: [...params.path, "additionalProperties"]
+		});
+	}
+	const keyValues = keyType._zod.values;
+	const omittableOnInput = ctx.io === "input" && inputOptin(def.valueType) !== void 0;
+	if (keyValues && !def.partial && !omittableOnInput) {
+		const validKeyValues = [...keyValues].filter((v) => typeof v === "string" || typeof v === "number");
+		if (validKeyValues.length > 0) json.required = validKeyValues.map(String);
+	}
+};
 var nullableProcessor = (schema, ctx, json, params) => {
 	const def = schema._zod.def;
 	const inner = processSchema(def.innerType, ctx, params);
@@ -6433,6 +7075,28 @@ function intersection(left, right) {
 		right
 	});
 }
+var ZodRecord = /*@__PURE__*/ $constructor("ZodRecord", (inst, def) => {
+	_ensureDefaultMemoizer();
+	$ZodRecord.init(inst, def);
+	ZodType.init(inst, def);
+	inst._zod.processJSONSchema = (ctx, json, params) => recordProcessor(inst, ctx, json, params);
+	inst.keyType = def.keyType;
+	inst.valueType = def.valueType;
+});
+function record(keyType, valueType, params) {
+	if (!valueType || !valueType._zod) return new ZodRecord({
+		type: "record",
+		keyType: string(),
+		valueType: keyType,
+		...normalizeParams(valueType)
+	});
+	return new ZodRecord({
+		type: "record",
+		keyType,
+		valueType,
+		...normalizeParams(params)
+	});
+}
 var ZodEnum = /*@__PURE__*/ $constructor("ZodEnum", (inst, def) => {
 	$ZodEnum.init(inst, def);
 	ZodType.init(inst, def);
@@ -6645,11 +7309,14 @@ function preprocess(fn, schema) {
 		out: schema
 	});
 }
-//#endregion
-//#region src/lib/mappers.ts
-var affixSchema = object({
+object({
 	stat: _enum(STAT_KEYS),
 	value: number()
+});
+var itemModSchema = object({
+	stat: _enum(STAT_KEYS),
+	value: number(),
+	name: string()
 });
 var itemSchema = object({
 	id: string(),
@@ -6659,7 +7326,12 @@ var itemSchema = object({
 	rarity: preprocess((value) => value === "uncommon" ? "magic" : value, _enum(RARITIES)),
 	baseId: string(),
 	name: string(),
-	affixes: array(affixSchema),
+	implicit: itemModSchema,
+	prefixes: array(itemModSchema),
+	suffixes: array(itemModSchema),
+	special: itemModSchema.nullable(),
+	rank: number().int().min(0).max(10),
+	forgePity: number().int().nonnegative(),
 	equippedSlot: _enum(EQUIP_SLOTS).nullable(),
 	locked: boolean()
 });
@@ -6670,6 +7342,7 @@ var playerSchema = object({
 	gold: number().int().nonnegative(),
 	diamonds: number().int().nonnegative(),
 	scrap: number().int().nonnegative(),
+	essences: record(string(), number().int().nonnegative()).optional(),
 	realmId: number().int().positive(),
 	highestRealmId: number().int().positive().optional(),
 	realmProgress: number().int().min(0).max(1e4),
@@ -6688,6 +7361,7 @@ function playerFromRow(row) {
 		gold: Number(row.gold),
 		diamonds: Number(row.diamonds),
 		scrap: Number(row.scrap),
+		essences: row.essences ?? {},
 		realmId: row.realm_id,
 		highestRealmId: row.highest_realm_id ?? row.realm_id,
 		realmProgress: row.realm_progress,
@@ -6702,6 +7376,7 @@ function playerFromRow(row) {
 	const monsterIndex = huntIndex(realm, parsed.monsterIndex);
 	return {
 		...parsed,
+		essences: parsed.essences ?? {},
 		highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId),
 		monsterIndex,
 		queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex)
@@ -6715,6 +7390,7 @@ function playerToRow(player) {
 		gold: player.gold,
 		diamonds: player.diamonds,
 		scrap: player.scrap,
+		essences: player.essences ?? {},
 		realm_id: player.realmId,
 		highest_realm_id: player.highestRealmId,
 		realm_progress: player.realmProgress,
@@ -6726,19 +7402,38 @@ function playerToRow(player) {
 		content_version: player.contentVersion
 	};
 }
+function flatAffixes(item) {
+	return [
+		item.implicit,
+		...item.prefixes,
+		...item.suffixes,
+		...item.special ? [item.special] : []
+	].map((mod) => ({
+		stat: mod.stat,
+		value: mod.value
+	}));
+}
 function itemFromRow(row) {
-	return itemSchema.parse({
+	const normalized = normalizeItem({
 		id: row.id,
 		playerId: row.player_id,
 		slotType: row.slot_type,
 		weaponHand: row.weapon_hand,
 		rarity: row.rarity,
 		baseId: row.base_id,
-		name: row.name.replace(/^Uncommon /, "Magic "),
+		name: row.name,
 		affixes: row.affixes,
+		implicit: row.implicit,
+		prefixes: row.prefixes,
+		suffixes: row.suffixes,
+		special: row.special,
+		rank: row.rank,
+		forgePity: row.forge_pity,
 		equippedSlot: row.equipped_slot,
 		locked: row.locked
 	});
+	if (!normalized) throw new Error(`Invalid item ${row.id}`);
+	return itemSchema.parse(normalized);
 }
 function itemToRow(item) {
 	return {
@@ -6749,7 +7444,13 @@ function itemToRow(item) {
 		rarity: item.rarity,
 		base_id: item.baseId,
 		name: item.name,
-		affixes: item.affixes,
+		affixes: flatAffixes(item),
+		implicit: item.implicit,
+		prefixes: item.prefixes,
+		suffixes: item.suffixes,
+		special: item.special,
+		rank: item.rank,
+		forge_pity: item.forgePity,
 		equipped_slot: item.equippedSlot,
 		locked: item.locked
 	};

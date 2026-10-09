@@ -11,6 +11,7 @@ import {
   type SlotType,
 } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
+import { ForgeModal } from '../craft/ForgeModal'
 import { ItemCard, slotLabel } from '../items/ItemCard'
 import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
@@ -41,6 +42,7 @@ export function InventoryScreen() {
   const [rarities, setRarities] = useState<Rarity[]>([])
   const [draftTypes, setDraftTypes] = useState<SlotType[]>([])
   const [draftRarities, setDraftRarities] = useState<Rarity[]>([])
+  const [forgeItemId, setForgeItemId] = useState<string | null>(null)
   const [salvageOpen, setSalvageOpen] = useState(false)
   const [salvageRarities, setSalvageRarities] = useState<Rarity[]>([])
   const [salvageMode, setSalvageMode] = useState(false)
@@ -280,6 +282,13 @@ export function InventoryScreen() {
             ))}
             <button
               type="button"
+              className="rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
+              onClick={() => setForgeItemId(selected.id)}
+            >
+              Forge
+            </button>
+            <button
+              type="button"
               className="rounded-lg border border-red-900/80 px-3 py-1.5 text-sm text-red-300"
               onClick={() => {
                 salvage([selected.id])
@@ -291,6 +300,7 @@ export function InventoryScreen() {
           </div>
         </Modal>
       )}
+      {forgeItemId && <ForgeModal itemId={forgeItemId} onClose={() => setForgeItemId(null)} />}
       {salvageOpen && (
         <Modal
           title="Mass salvage"
