@@ -8,8 +8,8 @@ Official docs: [CLI](https://docs.shipstatic.com/cli) · [API](https://docs.ship
 
 | | |
 | --- | --- |
-| URL | https://primed-spark-sevbb82.shipstatic.com |
-| Deployment | `primed-spark-sevbb82.shipstatic.com` |
+| URL | https://refined-trail-7x9j57d.shipstatic.com |
+| Deployment | `refined-trail-7x9j57d.shipstatic.com` |
 | Label | `idle-relic` |
 | Account | simsekm7@gmail.com (free plan) |
 
