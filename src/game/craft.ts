@@ -27,7 +27,8 @@ const TEMPER_CHANCE = [0, 1, 0.9, 0.8, 0.7, 0.58, 0.46, 0.34, 0.24, 0.16, 0.1]
 export function realmForRank(rank: number): number {
   if (rank <= 3) return 1
   if (rank <= 6) return 2
-  return 3
+  if (rank <= 7) return 3
+  return 4
 }
 
 export function temperChance(item: Item): number {

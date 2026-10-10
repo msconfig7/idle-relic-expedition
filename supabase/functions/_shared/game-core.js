@@ -194,6 +194,71 @@ var realms = [
 				materialDrop: .2
 			}
 		]
+	},
+	{
+		id: 4,
+		name: "Blighted Fen",
+		blurb: "A rotting marsh where relics seep poison.",
+		image: "/realms/blighted-fen.jpg",
+		theme: {
+			from: "#1c3a14",
+			to: "#071208",
+			accent: "#bef264"
+		},
+		monsters: [
+			{
+				id: "fen-leech",
+				name: "Fen Leech",
+				image: "/monsters/fen-leech.png",
+				hp: 1100,
+				attack: 78,
+				defense: 34,
+				xp: 1400,
+				gold: 36,
+				progress: 36,
+				itemDrop: .026,
+				materialDrop: .17
+			},
+			{
+				id: "spore-beetle",
+				name: "Spore Beetle",
+				image: "/monsters/spore-beetle.png",
+				hp: 1380,
+				attack: 70,
+				defense: 56,
+				xp: 2e3,
+				gold: 42,
+				progress: 42,
+				itemDrop: .028,
+				materialDrop: .19
+			},
+			{
+				id: "mire-stalker",
+				name: "Mire Stalker",
+				image: "/monsters/mire-stalker.png",
+				hp: 1240,
+				attack: 94,
+				defense: 40,
+				xp: 2600,
+				gold: 50,
+				progress: 48,
+				itemDrop: .03,
+				materialDrop: .16
+			},
+			{
+				id: "blight-regent",
+				name: "Blight Regent",
+				image: "/monsters/blight-regent.png",
+				hp: 1700,
+				attack: 110,
+				defense: 52,
+				xp: 3600,
+				gold: 62,
+				progress: 56,
+				itemDrop: .034,
+				materialDrop: .22
+			}
+		]
 	}
 ];
 //#endregion
@@ -350,6 +415,30 @@ var byId = new Map([
 		name: "Tyrant Ember",
 		monster: "Ember Tyrant",
 		realmId: 3
+	},
+	{
+		id: "fen-leech",
+		name: "Leech Ichor",
+		monster: "Fen Leech",
+		realmId: 4
+	},
+	{
+		id: "spore-beetle",
+		name: "Beetle Spore",
+		monster: "Spore Beetle",
+		realmId: 4
+	},
+	{
+		id: "mire-stalker",
+		name: "Stalker Venom",
+		monster: "Mire Stalker",
+		realmId: 4
+	},
+	{
+		id: "blight-regent",
+		name: "Regent Heart",
+		monster: "Blight Regent",
+		realmId: 4
 	}
 ].map((entry) => [entry.id, entry]));
 function essenceDef(id) {

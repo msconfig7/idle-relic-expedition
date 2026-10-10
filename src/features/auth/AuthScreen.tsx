@@ -31,7 +31,7 @@ export function AuthScreen({ onLocal }: Props) {
         <p className="text-xs uppercase tracking-[0.3em] text-amber-500/80">Idle RPG</p>
         <h1 className="mt-2 font-serif text-3xl text-amber-100">Idle Relic Expedition</h1>
         <p className="mt-3 text-sm text-stone-400">
-          Auto-hunt through three realms, gear up, and carve a path through an overwhelming skill tree.
+          Auto-hunt through four realms, gear up, and carve a path through an overwhelming skill tree.
         </p>
         {supabaseConfigured ? (
           <form className="mt-6 space-y-3" onSubmit={onSubmit}>

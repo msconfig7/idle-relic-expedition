@@ -67,7 +67,7 @@ export function RealmSelectModal() {
         <p className="mt-3 text-center text-xs text-amber-200">A farther realm is open. You can return here anytime.</p>
       )}
       {!nextRealm(highest) && player.realmId === highest && player.realmProgress >= REALM_PROGRESS_CAP && (
-        <p className="mt-3 text-center text-xs text-amber-200">The map ends at Ember Peaks.</p>
+        <p className="mt-3 text-center text-xs text-amber-200">The map ends at {realms[realms.length - 1]?.name}.</p>
       )}
     </Modal>
   )
