@@ -1,6 +1,6 @@
 import { essencesInRealm } from '../../content/essences'
 import { getRealm } from '../../game'
-import { ascendCost, ascendTarget, essenceHeld, rerollCost, temperChance, temperCost } from '../../game/craft'
+import { essenceHeld, rerollCost, temperChance, temperCost } from '../../game/craft'
 import { formatAffix } from '../../game/format'
 import { listItemMods } from '../../game/items'
 import { RARITY_CLASS, RARITY_LABEL } from '../../game/rarity'
@@ -36,7 +36,6 @@ export function ForgeModal({ itemId, onClose }: { itemId: string; onClose: () =>
   const player = useGameStore((s) => s.player)
   const temper = useGameStore((s) => s.temperItem)
   const reroll = useGameStore((s) => s.rerollItemMod)
-  const ascend = useGameStore((s) => s.ascendItem)
   const [phase, setPhase] = useState<Phase>('idle')
   const [banner, setBanner] = useState('')
   const [blocked, setBlocked] = useState('')
@@ -54,8 +53,6 @@ export function ForgeModal({ itemId, onClose }: { itemId: string; onClose: () =>
 
   const busy = phase !== 'idle'
   const temperPrice = temperCost(item)
-  const ascendPrice = ascendCost(item)
-  const ascendTo = ascendTarget(item)
   const rerollPrice = rerollCost(item)
   const essences = player.essences ?? {}
   const currentMods = listItemMods(item)
@@ -167,28 +164,6 @@ export function ForgeModal({ itemId, onClose }: { itemId: string; onClose: () =>
           <p className="mt-1 text-xs text-stone-400">This relic is already +10.</p>
         )}
       </section>
-
-      {ascendPrice && ascendTo && (
-        <section className="mt-4">
-          <h4 className="text-xs font-medium uppercase tracking-wide text-stone-500">Ascend</h4>
-          <p className="mt-1 text-xs text-stone-400">Opens the next prefix and suffix. Special affixes still only drop.</p>
-          <CostLines
-            scrap={player.scrap}
-            costScrap={ascendPrice.scrap}
-            essenceRealm={ascendPrice.essenceRealm}
-            essenceCount={ascendPrice.essenceCount}
-            essences={essences}
-          />
-          <button
-            type="button"
-            disabled={busy || !canPay(player.scrap, essences, ascendPrice)}
-            className="mt-2 w-full rounded-lg border border-amber-700 py-2 text-sm text-amber-100 disabled:opacity-40"
-            onClick={() => forge(() => ascend(item.id), () => RARITY_LABEL[ascendTo])}
-          >
-            Ascend to {RARITY_LABEL[ascendTo]}
-          </button>
-        </section>
-      )}
 
       <section className="mt-4">
         <h4 className="text-xs font-medium uppercase tracking-wide text-stone-500">Reroll</h4>

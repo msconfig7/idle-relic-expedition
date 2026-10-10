@@ -1,3 +1,9 @@
+import {
+  ASCEND_SACRIFICE_COUNT,
+  ascendFodderReason,
+  ascendKeeperReason,
+  ascendTarget,
+} from '../../game/craft'
 import { equippedInSlot, slotsForType } from '../../game/equipment'
 import { salvageScrap } from '../../game/salvage'
 import { RARITY_CHIP, RARITY_CLASS, RARITY_LABEL, RARITY_TEXT } from '../../game/rarity'
@@ -25,6 +31,7 @@ export function InventoryScreen() {
   const selectItem = useGameStore((s) => s.selectItem)
   const equip = useGameStore((s) => s.equip)
   const salvage = useGameStore((s) => s.salvage)
+  const ascend = useGameStore((s) => s.ascendItem)
   const unseenItemIds = useGameStore((s) => s.unseenItemIds)
   const unseen = useMemo(() => new Set(unseenItemIds), [unseenItemIds])
   const selected = items.find((item) => item.id === selectedItemId && !item.equippedSlot)
@@ -39,6 +46,11 @@ export function InventoryScreen() {
   const [salvageRarities, setSalvageRarities] = useState<Rarity[]>([])
   const [salvageMode, setSalvageMode] = useState(false)
   const [salvagePickIds, setSalvagePickIds] = useState<string[]>([])
+  const [ascendMode, setAscendMode] = useState(false)
+  const [keeperId, setKeeperId] = useState<string | null>(null)
+  const [fodderIds, setFodderIds] = useState<string[]>([])
+  const [ascendError, setAscendError] = useState('')
+  const [ascendNote, setAscendNote] = useState('')
   const longPressTimer = useRef<number | null>(null)
   const longPressFired = useRef(false)
 
@@ -64,6 +76,17 @@ export function InventoryScreen() {
   }, [unequipped, salvagePickIds])
   const salvagePickCount = salvagePicked.length
   const salvagePickScrap = salvagePicked.reduce((sum, item) => sum + salvageScrap(item), 0)
+  const keeper = unequipped.find((item) => item.id === keeperId) ?? null
+  const chosenFodderIds = keeper
+    ? fodderIds.filter((id) => unequipped.some((item) => item.id === id))
+    : []
+  const ascendTo = keeper ? ascendTarget(keeper) : null
+  const ascendReady = Boolean(keeper && ascendTo && chosenFodderIds.length === ASCEND_SACRIFICE_COUNT)
+  const ascendGuide = ascendError
+    ? ascendError
+    : !keeper
+      ? 'Keep a common or magic relic. Sacrifice 2 others of the same type.'
+      : `Sacrifice 2 other ${TYPE_LABEL[keeper.slotType].toLowerCase()} relics (${chosenFodderIds.length}/${ASCEND_SACRIFICE_COUNT}). Suffixes reroll.`
 
   useEffect(() => {
     return () => clearLongPress()
@@ -95,8 +118,62 @@ export function InventoryScreen() {
 
   function enterSalvageMode(itemId: string) {
     selectItem(null)
+    exitAscendMode()
     setSalvageMode(true)
     setSalvagePickIds([itemId])
+  }
+
+  function exitAscendMode() {
+    setAscendMode(false)
+    setKeeperId(null)
+    setFodderIds([])
+    setAscendError('')
+  }
+
+  function enterAscendMode() {
+    selectItem(null)
+    setAscendNote('')
+    exitSalvageMode()
+    setAscendMode(true)
+    setKeeperId(null)
+    setFodderIds([])
+    setAscendError('')
+  }
+
+  function onAscendTap(item: Item) {
+    if (item.id === keeperId) {
+      setKeeperId(null)
+      setFodderIds([])
+      setAscendError('')
+      return
+    }
+    if (chosenFodderIds.includes(item.id)) {
+      setFodderIds((current) => current.filter((id) => id !== item.id))
+      setAscendError('')
+      return
+    }
+    if (!keeper) {
+      const reason = ascendKeeperReason(item)
+      if (reason) {
+        setAscendError(reason)
+        return
+      }
+      setKeeperId(item.id)
+      setFodderIds([])
+      setAscendError('')
+      return
+    }
+    const reason = ascendFodderReason(keeper, item)
+    if (reason) {
+      setAscendError(reason)
+      return
+    }
+    if (chosenFodderIds.length >= ASCEND_SACRIFICE_COUNT) {
+      setAscendError('Two sacrifices are enough. Tap one to remove it.')
+      return
+    }
+    setFodderIds([...chosenFodderIds, item.id])
+    setAscendError('')
   }
 
   function toggleSalvagePick(itemId: string) {
@@ -106,7 +183,7 @@ export function InventoryScreen() {
   }
 
   function onItemPointerDown(item: Item) {
-    if (item.locked) return
+    if (ascendMode || item.locked) return
     longPressFired.current = false
     clearLongPress()
     longPressTimer.current = window.setTimeout(() => {
@@ -122,6 +199,10 @@ export function InventoryScreen() {
       longPressFired.current = false
       return
     }
+    if (ascendMode) {
+      onAscendTap(item)
+      return
+    }
     if (salvageMode) {
       if (!item.locked) toggleSalvagePick(item.id)
       return
@@ -130,36 +211,50 @@ export function InventoryScreen() {
   }
 
   return (
-    <div className={salvageMode && salvagePickCount > 0 ? 'pb-20' : undefined}>
+    <div className={(salvageMode && salvagePickCount > 0) || (ascendMode && keeper) ? 'pb-20' : undefined}>
       <div className="mb-3 flex items-end justify-between gap-2">
         <div>
           <h2 className="font-serif text-xl text-amber-100">Equipment</h2>
           <p className="text-sm text-stone-400">
             {unequipped.length}/{MAX_INVENTORY} in bag
             {salvageMode ? ` · ${salvagePickCount} selected` : ''}
+            {ascendMode && keeper ? ` · sacrifice ${chosenFodderIds.length}/${ASCEND_SACRIFICE_COUNT}` : ''}
           </p>
         </div>
-        <div className="flex gap-2">
-        {salvageMode ? (
+        <div className="flex flex-wrap justify-end gap-1.5">
+        {salvageMode || ascendMode ? (
           <button
             type="button"
             className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm"
-            onClick={exitSalvageMode}
+            onClick={() => {
+              if (ascendMode) exitAscendMode()
+              else exitSalvageMode()
+            }}
           >
             Cancel
           </button>
         ) : (
-          <button
-            type="button"
-            className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm disabled:opacity-40"
-            disabled={unequipped.length === 0}
-            onClick={() => {
-              setSalvageRarities([])
-              setSalvageOpen(true)
-            }}
-          >
-            Salvage
-          </button>
+          <>
+            <button
+              type="button"
+              className="rounded-lg border border-amber-700 px-3 py-1.5 text-sm text-amber-100 disabled:opacity-40"
+              disabled={unequipped.length === 0}
+              onClick={enterAscendMode}
+            >
+              Ascend
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-stone-600 px-3 py-1.5 text-sm disabled:opacity-40"
+              disabled={unequipped.length === 0}
+              onClick={() => {
+                setSalvageRarities([])
+                setSalvageOpen(true)
+              }}
+            >
+              Salvage
+            </button>
+          </>
         )}
         <button
           type="button"
@@ -177,6 +272,9 @@ export function InventoryScreen() {
         </button>
         </div>
       </div>
+      {ascendMode ? (
+        <p className={`mb-2 text-xs ${ascendError ? 'text-red-300' : 'text-stone-400'}`}>{ascendGuide}</p>
+      ) : null}
       {bag.length === 0 ? (
         <p className="text-center rounded-2xl border border-dashed border-stone-700 p-8 text-stone-500">
           {unequipped.length === 0
@@ -187,6 +285,13 @@ export function InventoryScreen() {
         <div className="grid grid-cols-4 gap-2">
           {bag.map((item) => {
             const picked = salvageMode && salvagePickIds.includes(item.id)
+            const keeping = ascendMode && item.id === keeperId
+            const sacrificed = ascendMode && chosenFodderIds.includes(item.id)
+            const dimmed =
+              ascendMode &&
+              !keeping &&
+              !sacrificed &&
+              (keeper ? ascendFodderReason(keeper, item) !== null : ascendKeeperReason(item) !== null)
             return (
             <button
               key={item.id}
@@ -198,11 +303,25 @@ export function InventoryScreen() {
               onContextMenu={(event) => event.preventDefault()}
               onClick={() => onItemClick(item)}
               className={`relative flex flex-col items-center rounded-xl border-2 bg-stone-950 px-1 py-1.5 text-center select-none touch-manipulation ${
-                picked
+                dimmed ? 'opacity-40' : ''
+              } ${
+                picked || sacrificed
                   ? `border-red-500 ring-2 ring-red-500/70 ${RARITY_TEXT[item.rarity]}`
-                  : `${RARITY_CLASS[item.rarity]} ${item.id === selectedItemId ? 'ring-2 ring-white/70' : ''}`
+                  : keeping
+                    ? 'border-amber-400 ring-2 ring-amber-400/70 text-amber-100'
+                    : `${RARITY_CLASS[item.rarity]} ${item.id === selectedItemId ? 'ring-2 ring-white/70' : ''}`
               }`}
             >
+              {keeping ? (
+                <span className="absolute left-1 top-1 rounded-full bg-amber-400 px-1.5 text-[9px] font-semibold leading-4 text-stone-950">
+                  Keep
+                </span>
+              ) : null}
+              {sacrificed ? (
+                <span className="absolute left-1 top-1 rounded-full bg-red-600 px-1.5 text-[9px] font-semibold leading-4 text-red-50">
+                  Sacrifice
+                </span>
+              ) : null}
               {unseen.has(item.id) ? (
                 <span className="absolute right-1 top-1 rounded-full bg-amber-400 px-1.5 text-[9px] font-semibold leading-4 text-stone-950">
                   New
@@ -214,6 +333,29 @@ export function InventoryScreen() {
             </button>
             )
           })}
+        </div>
+      )}
+      {ascendMode && keeper && ascendTo && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-16 z-30 flex justify-center px-3">
+          <button
+            type="button"
+            disabled={!ascendReady}
+            className="pointer-events-auto mb-3 w-full max-w-[406px] rounded-xl bg-amber-700 px-4 py-3 text-sm font-medium text-amber-50 shadow-lg shadow-black/40 disabled:opacity-40"
+            onClick={() => {
+              const result = ascend(keeper.id, chosenFodderIds)
+              if (!result.ok) {
+                setAscendError(result.reason)
+                return
+              }
+              setAscendNote(`Ascended to ${RARITY_LABEL[result.item.rarity]}. Suffixes were rerolled.`)
+              exitAscendMode()
+            }}
+          >
+            Ascend to {RARITY_LABEL[ascendTo]}
+            <span className="ml-1.5 text-amber-200/90">
+              · sacrifice {chosenFodderIds.length}/{ASCEND_SACRIFICE_COUNT}
+            </span>
+          </button>
         </div>
       )}
       {salvageMode && salvagePickCount > 0 && (
@@ -235,7 +377,14 @@ export function InventoryScreen() {
         </div>
       )}
       {selected && (
-        <Modal title={selected.name} onClose={() => selectItem(null)}>
+        <Modal
+          title={selected.name}
+          onClose={() => {
+            setAscendNote('')
+            selectItem(null)
+          }}
+        >
+          {ascendNote ? <p className="mb-2 text-sm text-amber-200">{ascendNote}</p> : null}
           <ItemCard item={selected} />
           <div className="mt-3 space-y-2">
             {slotsForType(selected.slotType).map((slot) => {
