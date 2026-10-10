@@ -2,7 +2,7 @@ import { essencesInRealm } from '../content/essences'
 import { PREFIX_STATS, SUFFIX_STATS } from '../content/mods'
 import { chance } from './rng'
 import { modCap, rollFromPool, usedStats, withItemName } from './items'
-import { MAX_ITEM_RANK, type EssenceCounts, type Item, type PlayerState, type Rarity } from './types'
+import { MAX_ITEM_RANK, type EssenceCounts, type Item, type PlayerState, type Rarity, type StatKey } from './types'
 
 export type CraftCost = {
   scrap: number
@@ -53,15 +53,25 @@ export function rerollCost(item: Item): CraftCost {
   }
 }
 
+export const ASCEND_SACRIFICE_COUNT = 2
+
 export function ascendTarget(item: Item): Rarity | null {
   if (item.rarity === 'common') return 'magic'
   if (item.rarity === 'magic') return 'rare'
   return null
 }
 
-export function ascendCost(item: Item): CraftCost | null {
-  if (item.rarity === 'common') return { scrap: 48, essenceRealm: 1, essenceCount: 3 }
-  if (item.rarity === 'magic') return { scrap: 140, essenceRealm: 2, essenceCount: 5 }
+export function ascendKeeperReason(item: Item): string | null {
+  if (item.equippedSlot) return 'Unequip this relic before ascending.'
+  if (!ascendTarget(item)) return 'Only common and magic relics can ascend.'
+  return null
+}
+
+export function ascendFodderReason(keeper: Item, fodder: Item): string | null {
+  if (fodder.id === keeper.id) return 'Choose two other relics.'
+  if (fodder.equippedSlot) return 'Unequip a sacrifice before ascending.'
+  if (fodder.locked) return 'Locked relics cannot be sacrificed.'
+  if (fodder.slotType !== keeper.slotType) return 'Sacrifices must be the same type.'
   return null
 }
 
@@ -140,28 +150,38 @@ export function rerollItemMod(
   }
 }
 
-export function ascendItem(player: PlayerState, item: Item, rng: () => number): CraftOutcome {
-  const nextRarity = ascendTarget(item)
-  const cost = ascendCost(item)
-  if (!nextRarity || !cost) return { ok: false, reason: 'Epic and legendary relics are found, not forged.' }
-  const missing = missingReason(player, cost)
-  if (missing) return { ok: false, reason: missing }
-  const paid = spendMaterials(player, cost)
-  if (!paid) return { ok: false, reason: missing ?? 'Not enough materials.' }
-  const cap = modCap(nextRarity)
-  const prefixes = [...item.prefixes]
-  const suffixes = [...item.suffixes]
-  const used = usedStats(item)
-  while (prefixes.length < cap.prefixes) {
-    prefixes.push(rollFromPool(rng, PREFIX_STATS, nextRarity, used))
-  }
-  while (suffixes.length < cap.suffixes) {
-    suffixes.push(rollFromPool(rng, SUFFIX_STATS, nextRarity, used))
+function rollAscendedSuffixes(keeper: Item, rarity: Rarity, rng: () => number): Item['suffixes'] {
+  const used = new Set<StatKey>([keeper.implicit.stat])
+  for (const mod of keeper.prefixes) used.add(mod.stat)
+  if (keeper.special) used.add(keeper.special.stat)
+  const count = modCap(rarity).suffixes
+  const suffixes: Item['suffixes'] = []
+  for (let i = 0; i < count; i++) suffixes.push(rollFromPool(rng, SUFFIX_STATS, rarity, used))
+  return suffixes
+}
+
+export function ascendItem(
+  keeper: Item,
+  fodder: Item[],
+  rng: () => number,
+): { ok: false; reason: string } | { ok: true; item: Item } {
+  const keeperReason = ascendKeeperReason(keeper)
+  if (keeperReason) return { ok: false, reason: keeperReason }
+  const nextRarity = ascendTarget(keeper)
+  if (!nextRarity) return { ok: false, reason: 'Only common and magic relics can ascend.' }
+  if (fodder.length !== ASCEND_SACRIFICE_COUNT) return { ok: false, reason: 'Sacrifice 2 relics of the same type.' }
+  const ids = new Set(fodder.map((item) => item.id))
+  if (ids.size !== fodder.length) return { ok: false, reason: 'Choose two other relics.' }
+  for (const item of fodder) {
+    const reason = ascendFodderReason(keeper, item)
+    if (reason) return { ok: false, reason: reason }
   }
   return {
     ok: true,
-    success: true,
-    player: paid,
-    item: withItemName({ ...item, rarity: nextRarity, prefixes, suffixes }),
+    item: withItemName({
+      ...keeper,
+      rarity: nextRarity,
+      suffixes: rollAscendedSuffixes(keeper, nextRarity, rng),
+    }),
   }
 }

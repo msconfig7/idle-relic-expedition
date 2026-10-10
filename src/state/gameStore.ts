@@ -89,7 +89,7 @@ type GameStore = {
     kind: 'prefix' | 'suffix',
     index: number,
   ) => { ok: true; success: boolean } | { ok: false; reason: string }
-  ascendItem: (itemId: string) => { ok: true; success: boolean } | { ok: false; reason: string }
+  ascendItem: (keeperId: string, fodderIds: string[]) => { ok: true; item: Item } | { ok: false; reason: string }
   queueNode: (nodeId: number) => void
   confirmNodes: () => void
   discardNodes: () => void
@@ -450,9 +450,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return outcome.ok ? { ok: true, success: outcome.success } : outcome
   },
 
-  ascendItem: (itemId) => {
-    const outcome = applyCraft(get, set, itemId, (player, item) => ascendItemCraft(player, item, Math.random))
-    return outcome.ok ? { ok: true, success: outcome.success } : outcome
+  ascendItem: (keeperId, fodderIds) => {
+    const { items, player, combat, unseenItemIds } = get()
+    if (!player) return { ok: false, reason: 'That relic is gone.' }
+    const keeper = items.find((item) => item.id === keeperId)
+    if (!keeper) return { ok: false, reason: 'That relic is gone.' }
+    const fodder: Item[] = []
+    for (const id of fodderIds) {
+      const item = items.find((entry) => entry.id === id)
+      if (!item) return { ok: false, reason: 'A sacrifice is missing.' }
+      fodder.push(item)
+    }
+    const outcome = ascendItemCraft(keeper, fodder, Math.random)
+    if (!outcome.ok) return outcome
+    const remove = new Set(fodderIds)
+    const nextItems = items
+      .filter((item) => !remove.has(item.id))
+      .map((item) => (item.id === keeperId ? outcome.item : item))
+    const stats = deriveStats(player, nextItems)
+    const bagIds = new Set(nextItems.filter((item) => !item.equippedSlot).map((item) => item.id))
+    set({
+      items: nextItems,
+      stats,
+      unseenItemIds: mergeUnseen(player.id, unseenItemIds, [], bagIds),
+      selectedItemId: keeperId,
+      dirty: true,
+      combat: combat
+        ? { ...combat, playerMaxHp: stats.hp, playerHp: Math.min(combat.playerHp, stats.hp) }
+        : combat,
+    })
+    return outcome
   },
 
   salvage: (itemIds) => {
