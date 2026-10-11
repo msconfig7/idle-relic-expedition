@@ -1,5 +1,6 @@
 import { xpIntoLevel, xpToNext } from '../../game'
 import {
+  averagePace,
   etaToNextMs,
   formatLevelEta,
   formatXpRate,
@@ -12,32 +13,42 @@ import { useEffect, useState } from 'react'
 import { currentXpPerMinute } from './xpRateTracker'
 
 const LEVEL_CAP = 200
+const REFRESH_MS = 5_000
+/** One minute of 5-second pace readings. */
+const PACE_SAMPLES = 12
+let paceReadings: number[] = []
+let lastPaceSampleAt = 0
 
-export function XpProgressModal({ onClose }: { onClose: () => void }) {
-  const player = useGameStore((s) => s.player)!
-  const stats = useGameStore((s) => s.stats)
-  const combat = useGameStore((s) => s.combat)
-  const [now, setNow] = useState(() => Date.now())
+function resetPaceSamples(): void {
+  paceReadings = []
+  lastPaceSampleAt = 0
+}
 
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [])
+type PaceView = {
+  level: number
+  into: number
+  need: number
+  remaining: number
+  pct: number
+  atCap: boolean
+  xpPerMinute: number
+  live: boolean
+  eta: number | null
+  monsterName: string | null
+  perKill: number
+}
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  const into = xpIntoLevel(player.xp, player.level)
-  const need = xpToNext(player.level)
+/** Snapshot the averaged pace. The modal keeps it until the next 5s refresh. */
+function capturePace(now: number): PaceView {
+  const { player, stats, combat } = useGameStore.getState()
+  const level = player?.level ?? 1
+  const xp = player?.xp ?? 0
+  const into = xpIntoLevel(xp, level)
+  const need = xpToNext(level)
   const remaining = Math.max(0, need - into)
   const pct = need > 0 ? Math.min(100, (into / need) * 100) : 100
-  const atCap = player.level >= LEVEL_CAP
-  const monster = combat?.monster.def
+  const atCap = level >= LEVEL_CAP
+  const monster = combat?.monster.def ?? null
   const perKill = monster && stats ? killXp(monster.xp, stats.xpMod) : 0
   const projected =
     monster && stats
@@ -51,10 +62,52 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
           monsterDefense: monster.defense,
         })
       : 0
-  const measured = currentXpPerMinute(player.xp, now)
-  const xpPerMinute = measured ?? projected
+  const measured = player ? currentXpPerMinute(xp, now) : null
   const live = measured != null
-  const eta = atCap ? null : etaToNextMs(remaining, xpPerMinute)
+  if (paceReadings.length === 0 || now - lastPaceSampleAt >= REFRESH_MS - 250) {
+    paceReadings.push(measured ?? projected)
+    lastPaceSampleAt = now
+    if (paceReadings.length > PACE_SAMPLES) paceReadings.splice(0, paceReadings.length - PACE_SAMPLES)
+  }
+  const xpPerMinute = averagePace(paceReadings)
+  return {
+    level,
+    into,
+    need,
+    remaining,
+    pct,
+    atCap,
+    xpPerMinute,
+    live,
+    eta: atCap ? null : etaToNextMs(remaining, xpPerMinute),
+    monsterName: monster?.name ?? null,
+    perKill,
+  }
+}
+
+export function XpProgressModal({ onClose }: { onClose: () => void }) {
+  const [pace, setPace] = useState(() => {
+    resetPaceSamples()
+    return capturePace(Date.now())
+  })
+
+  useEffect(() => {
+    const id = window.setInterval(() => setPace(capturePace(Date.now())), REFRESH_MS)
+    return () => {
+      window.clearInterval(id)
+      resetPaceSamples()
+    }
+  }, [])
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const { level, into, need, remaining, pct, atCap, xpPerMinute, live, eta, monsterName, perKill } = pace
   const pctLabel = pct >= 100 ? '100%' : `${pct.toFixed(1)}%`
 
   return (
@@ -64,7 +117,7 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
           <ProgressRing pct={pct} label={pctLabel} />
           <div className="min-w-0 flex-1">
             <p className="text-[10px] font-medium uppercase tracking-[0.22em] text-stone-500">Level</p>
-            <p className="font-serif text-4xl leading-none text-amber-50 tabular-nums">{player.level}</p>
+            <p className="font-serif text-4xl leading-none text-amber-50 tabular-nums">{level}</p>
             <p className="mt-2 text-xs text-stone-400 tabular-nums">
               {into.toLocaleString()} / {need.toLocaleString()} XP
             </p>
@@ -93,7 +146,7 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
             <p className="mt-2 font-serif text-2xl leading-none text-violet-50 tabular-nums">
               {formatXpRate(xpPerMinute)}
             </p>
-            <p className="mt-1 text-[11px] text-stone-400">XP / min</p>
+            <p className="mt-1 text-[11px] text-stone-400">avg XP / min</p>
           </article>
 
           <article className="rounded-2xl border border-amber-400/20 bg-gradient-to-b from-amber-500/15 to-stone-950 p-3">
@@ -115,10 +168,10 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
             ? 'This is the highest level.'
             : live
               ? xpPerMinute > 0
-                ? 'Time to level up uses your XP gain over the last minute of combat.'
+                ? 'Average XP over the last minute of combat. Updates every 5 seconds.'
                 : 'No XP gained in the last minute, so a level-up time is not available yet.'
-              : monster
-                ? `${monster.name} awards ${perKill.toLocaleString()} XP. Estimated from this fight until your recent gains can set the pace.`
+              : monsterName
+                ? `${monsterName} awards ${perKill.toLocaleString()} XP. This average updates every 5 seconds.`
                 : 'Start a fight to estimate when you will level up.'}
         </p>
       </div>
