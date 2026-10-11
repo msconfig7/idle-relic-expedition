@@ -1,4 +1,5 @@
 import { getRealm, xpIntoLevel, xpToNext } from '../../game'
+import { killXp } from '../../game/xpForecast'
 import { MAX_INVENTORY } from '../../game/types'
 import { RARITY_TEXT } from '../../game/rarity'
 import { supabase } from '../../lib/supabase'
@@ -6,6 +7,8 @@ import { useGameStore } from '../../state/gameStore'
 import { RealmSelectModal } from '../combat/RealmSelectModal'
 import { Modal } from '../ui/Modal'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { XpProgressModal } from './XpProgressModal'
+import { observeXp } from './xpRateTracker'
 
 const tabs = [
   { id: 'combat', label: 'Combat' },
@@ -34,8 +37,16 @@ export function Shell({ children }: { children: ReactNode }) {
   const into = xpIntoLevel(player.xp, player.level)
   const need = xpToNext(player.level)
   const xpPct = Math.min(100, (into / need) * 100)
+  const monsterXp = useGameStore((s) => s.combat?.monster.def.xp ?? 0)
+  const xpMod = useGameStore((s) => s.stats?.xpMod ?? 1)
+  const [xpOpen, setXpOpen] = useState(false)
   const [bursts, setBursts] = useState<{ id: number; level: number }[]>([])
   const levelRef = useRef(player.level)
+  const burstLimit = monsterXp > 0 ? killXp(monsterXp, xpMod) * 6 : Number.POSITIVE_INFINITY
+
+  useEffect(() => {
+    observeXp(player.id, player.xp, burstLimit)
+  }, [player.id, player.xp, burstLimit])
 
   useEffect(() => {
     if (player.level > levelRef.current) {
@@ -88,12 +99,20 @@ export function Shell({ children }: { children: ReactNode }) {
                 Sign out
               </button>
             </div>
-            <div className="flex w-1/5 shrink-0 flex-col items-center gap-1">
-              <p className="text-[11px] font-medium tracking-wide text-amber-100">Level: {player.level}</p>
-              <div className="h-1 w-full overflow-hidden rounded-full bg-stone-800">
+            <button
+              type="button"
+              className="flex w-1/5 shrink-0 flex-col items-center gap-1 rounded-lg px-1 py-0.5 outline-none transition hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-violet-400/80"
+              aria-haspopup="dialog"
+              aria-expanded={xpOpen}
+              aria-label={`Level ${player.level}, ${Math.floor(xpPct)}% to next level`}
+              title="Level progress"
+              onClick={() => setXpOpen(true)}
+            >
+              <span className="text-[11px] font-medium tracking-wide text-amber-100">Level: {player.level}</span>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-stone-800 ring-1 ring-white/10">
                 <div className="h-full rounded-full bg-purple-500" style={{ width: `${xpPct}%` }} />
               </div>
-            </div>
+            </button>
           </div>
         </header>
         <main
@@ -168,6 +187,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </Modal>
         )}
+        {xpOpen && <XpProgressModal onClose={() => setXpOpen(false)} />}
         {realmPickerOpen && <RealmSelectModal />}
       </div>
     </div>
