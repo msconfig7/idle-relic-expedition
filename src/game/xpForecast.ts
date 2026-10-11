@@ -98,6 +98,14 @@ export function measuredXpPerMinute(
   return (gained / span) * 60_000
 }
 
+/** Mean of pace readings taken on each refresh. */
+export function averagePace(readings: readonly number[]): number {
+  if (readings.length === 0) return 0
+  let sum = 0
+  for (const value of readings) sum += value
+  return sum / readings.length
+}
+
 export function etaToNextMs(remainingXp: number, xpPerMinute: number): number | null {
   if (!Number.isFinite(remainingXp) || remainingXp <= 0) return 0
   if (!Number.isFinite(xpPerMinute) || xpPerMinute <= 0) return null
