@@ -187,16 +187,30 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
 }
 
 function ProgressRing({ pct, label }: { pct: number; label: string }) {
+  const size = 72
+  const stroke = 4
+  const radius = (size - stroke) / 2
+  const circumference = 2 * Math.PI * radius
+  const clamped = Math.min(100, Math.max(0, pct))
+  const drawn = (clamped / 100) * circumference
   return (
     <div className="relative grid h-[4.5rem] w-[4.5rem] shrink-0 place-items-center">
-      <div
-        className="absolute inset-0 rounded-full shadow-[0_0_24px_rgba(167,139,250,0.35)]"
-        style={{
-          background: `conic-gradient(#c084fc ${pct}%, rgba(255,255,255,0.08) 0)`,
-        }}
-      />
-      <div className="absolute inset-[5px] rounded-full bg-stone-900" />
-      <span className="relative text-sm font-semibold text-violet-100 tabular-nums">{label}</span>
+      <svg viewBox={`0 0 ${size} ${size}`} className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#44403c" strokeWidth={stroke} />
+        {clamped > 0 ? (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#c084fc"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${drawn} ${circumference}`}
+          />
+        ) : null}
+      </svg>
+      <span className="text-sm font-semibold text-violet-100 tabular-nums">{label}</span>
     </div>
   )
 }
