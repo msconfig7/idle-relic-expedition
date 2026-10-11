@@ -259,8 +259,8 @@ export function CombatScreen() {
                       {monster.name}
                       {active ? ' · fighting' : queued ? ' · next' : ''}
                     </p>
-                    <p className="mt-0.5 text-[11px] text-stone-400">
-                      {monster.trait.name} — {monster.trait.blurb}
+                    <p className="mt-0.5 text-[11px] tabular-nums text-stone-400">
+                      HP {monster.hp} · ATK {monster.attack} · XP {monster.xp}
                     </p>
                   </div>
                 </button>
