@@ -1,3 +1,4 @@
+import { HuntsModal } from '../combat/HuntsModal'
 import { getRealm, xpIntoLevel, xpToNext } from '../../game'
 import { killXp } from '../../game/xpForecast'
 import { MAX_INVENTORY } from '../../game/types'
@@ -25,6 +26,15 @@ export function Shell({ children }: { children: ReactNode }) {
   const grant = useGameStore((s) => s.offlineGrant)
   const acknowledge = useGameStore((s) => s.acknowledgeOffline)
   const realmPickerOpen = useGameStore((s) => s.realmPickerOpen)
+  const huntsOpen = useGameStore((s) => s.huntsOpen)
+  const openHunts = useGameStore((s) => s.openHunts)
+  const closeHunts = useGameStore((s) => s.closeHunts)
+  const huntNotices = useGameStore((s) => s.huntNotices)
+  const realmDoor = useGameStore((s) => s.realmDoor)
+  const acknowledgeDoor = useGameStore((s) => s.acknowledgeDoor)
+  const selectRealm = useGameStore((s) => s.selectRealm)
+  const bossFled = useGameStore((s) => s.bossFled)
+  const acknowledgeBossFled = useGameStore((s) => s.acknowledgeBossFled)
   const pendingCount = useGameStore((s) => s.pendingNodeIds.length)
   const pendingRemovalCount = useGameStore((s) => s.pendingRemovalNodeIds.length)
   const remainingPoints = player.skillPointsUnspent - pendingCount + pendingRemovalCount
@@ -115,6 +125,20 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </div>
         </header>
+        {huntNotices.length > 0 && !huntsOpen && (
+          <button
+            type="button"
+            className="hunt-toast absolute left-3 right-3 top-16 z-20 rounded-xl border border-amber-500/80 bg-amber-950/95 px-3 py-2 text-left shadow-lg"
+            onClick={openHunts}
+          >
+            <p className="text-[10px] uppercase tracking-[0.2em] text-amber-400">Hunt fulfilled</p>
+            <p className="font-serif text-sm text-amber-50">
+              {huntNotices.length === 1
+                ? huntNotices[0].title
+                : `${huntNotices.length} quarries are ready to seal`}
+            </p>
+          </button>
+        )}
         <main
           className={`min-h-0 flex-1 p-3 ${
             screen === 'skills' ? 'flex min-h-0 flex-col overflow-hidden' : 'overflow-y-auto'
@@ -175,9 +199,22 @@ export function Shell({ children }: { children: ReactNode }) {
         {grant && grant.kills > 0 && (
           <Modal title="While you were away" onClose={acknowledge}>
             <p className="text-sm text-stone-300">
-              {Math.floor(grant.seconds / 60)} min · {grant.kills} kills · +{grant.xp} XP · +{grant.gold} gold ·{' '}
+              {Math.floor(grant.seconds / 60)} min · {grant.kills} kills
+              {grant.elites > 0 ? ` · ${grant.elites} elites` : ''} · +{grant.xp} XP · +{grant.gold} gold ·{' '}
               {grant.drops} items · +{grant.scrap} scrap
             </p>
+            {bossFled && (
+              <p className="mt-2 text-sm text-amber-200">The warden withdrew. Realm bosses will not fight without you.</p>
+            )}
+            {grant.fulfilledHunts.length > 0 && (
+              <ul className="mt-3 space-y-1">
+                {grant.fulfilledHunts.map((title, index) => (
+                  <li key={`${title}-${index}`} className="text-sm text-amber-100">
+                    Hunt fulfilled — {title}
+                  </li>
+                ))}
+              </ul>
+            )}
             <button
               type="button"
               className="mt-4 w-full rounded-lg bg-amber-700 py-2 text-sm"
@@ -187,6 +224,42 @@ export function Shell({ children }: { children: ReactNode }) {
             </button>
           </Modal>
         )}
+        {bossFled && !(grant && grant.kills > 0) && (
+          <Modal title="The warden withdrew" onClose={acknowledgeBossFled}>
+            <p className="text-sm text-stone-300">You were away too long. Realm bosses will not fight without you.</p>
+            <button
+              type="button"
+              className="mt-4 w-full rounded-lg bg-amber-700 py-2 text-sm"
+              onClick={acknowledgeBossFled}
+            >
+              Continue
+            </button>
+          </Modal>
+        )}
+        {realmDoor && (
+          <Modal title={realmDoor.title} onClose={acknowledgeDoor}>
+            <p className="text-sm text-stone-300">{realmDoor.body}</p>
+            <div className="mt-4 grid gap-2">
+              {realmDoor.nextRealmId != null && (
+                <button
+                  type="button"
+                  className="w-full rounded-lg bg-amber-600 py-2 text-sm text-stone-950"
+                  onClick={() => {
+                    const nextId = realmDoor.nextRealmId
+                    if (nextId != null) selectRealm(nextId)
+                    acknowledgeDoor()
+                  }}
+                >
+                  Enter {getRealm(realmDoor.nextRealmId).name}
+                </button>
+              )}
+              <button type="button" className="w-full rounded-lg bg-stone-800 py-2 text-sm" onClick={acknowledgeDoor}>
+                Stay
+              </button>
+            </div>
+          </Modal>
+        )}
+        {huntsOpen && <HuntsModal onClose={closeHunts} />}
         {xpOpen && <XpProgressModal onClose={() => setXpOpen(false)} />}
         {realmPickerOpen && <RealmSelectModal />}
       </div>

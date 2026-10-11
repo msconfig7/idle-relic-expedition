@@ -1,5 +1,7 @@
 import { z } from 'zod'
-import type { EquipSlot, EssenceCounts, Item, ItemMod, PlayerState, Rarity, SlotType, WeaponHand } from '../game/types'
+import { huntFromUnknown } from '../game/contracts'
+import { migratePlayer } from '../game/migrate'
+import type { EquipSlot, EssenceCounts, HuntState, Item, ItemMod, PlayerState, Rarity, SlotType, WeaponHand } from '../game/types'
 import { getRealm, huntIndex } from '../game/combat'
 import { normalizeItem } from '../game/items'
 import { EQUIP_SLOTS, RARITIES, SLOT_TYPES, STAT_KEYS, WEAPON_HANDS } from '../game/types'
@@ -44,7 +46,9 @@ export const playerSchema = z.object({
   realmId: z.number().int().positive(),
   highestRealmId: z.number().int().positive().optional(),
   realmProgress: z.number().int().min(0).max(10_000),
+  progressRealmId: z.number().int().positive().optional(),
   monsterIndex: z.number().int().nonnegative().optional(),
+  hunt: z.unknown().optional(),
   queuedMonsterIndex: z.number().int().nonnegative().optional(),
   skillPointsUnspent: z.number().int().nonnegative(),
   allocatedNodeIds: z.array(z.number().int()),
@@ -62,7 +66,9 @@ export type PlayerRow = {
   essences?: EssenceCounts
   realm_id: number
   realm_progress: number
+  progress_realm_id?: number
   monster_index?: number
+  hunt?: HuntState
   queued_monster_index?: number
   skill_points_unspent: number
   allocated_node_ids: number[]
@@ -102,7 +108,9 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     realmId: row.realm_id,
     highestRealmId: row.highest_realm_id ?? row.realm_id,
     realmProgress: row.realm_progress,
+    progressRealmId: row.progress_realm_id ?? row.realm_id,
     monsterIndex: row.monster_index ?? 0,
+    hunt: huntFromUnknown(row.hunt),
     queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
     skillPointsUnspent: row.skill_points_unspent,
     allocatedNodeIds: row.allocated_node_ids ?? [],
@@ -111,13 +119,20 @@ export function playerFromRow(row: PlayerRow): PlayerState {
   })
   const realm = getRealm(parsed.realmId)
   const monsterIndex = huntIndex(realm, parsed.monsterIndex)
-  return {
+  return migratePlayer({
     ...parsed,
     essences: parsed.essences ?? {},
     highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId),
+    progressRealmId: parsed.progressRealmId ?? parsed.realmId,
     monsterIndex,
     queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
-  }
+    hunt: huntFromUnknown(parsed.hunt) ?? {
+      killsTowardElite: 0,
+      board: 1,
+      finalBossCleared: false,
+      contracts: [],
+    },
+  })
 }
 
 export function playerToRow(player: PlayerState): PlayerRow {
@@ -132,7 +147,9 @@ export function playerToRow(player: PlayerState): PlayerRow {
     realm_id: player.realmId,
     highest_realm_id: player.highestRealmId,
     realm_progress: player.realmProgress,
+    progress_realm_id: player.progressRealmId,
     monster_index: player.monsterIndex,
+    hunt: player.hunt,
     queued_monster_index: player.queuedMonsterIndex,
     skill_points_unspent: player.skillPointsUnspent,
     allocated_node_ids: player.allocatedNodeIds,

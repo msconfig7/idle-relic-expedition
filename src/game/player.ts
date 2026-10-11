@@ -1,8 +1,9 @@
+import { migratePlayer } from './migrate'
 import { STARTING_DIAMONDS, CONTENT_VERSION } from './types'
 import type { PlayerState } from './types'
 
 export function createPlayer(id: string, now = Date.now()): PlayerState {
-  return {
+  return migratePlayer({
     id,
     level: 1,
     xp: 0,
@@ -13,11 +14,13 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
     realmId: 1,
     highestRealmId: 1,
     realmProgress: 0,
+    progressRealmId: 1,
     monsterIndex: 0,
     queuedMonsterIndex: 0,
+    hunt: { killsTowardElite: 0, board: 1, finalBossCleared: false, contracts: [] },
     skillPointsUnspent: 3,
     allocatedNodeIds: [],
     lastSettledAt: now,
     contentVersion: CONTENT_VERSION,
-  }
+  })
 }

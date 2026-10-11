@@ -1,4 +1,5 @@
 import { getRealm, huntIndex } from '../game/combat'
+import { migratePlayer } from '../game/migrate'
 import { createPlayer } from '../game/player'
 import { settleOffline } from '../game/offline'
 import { normalizeItem } from '../game/items'
@@ -17,13 +18,20 @@ function readLocal(): SaveBlob | null {
     const parsed = JSON.parse(raw) as SaveBlob
     const realm = getRealm(parsed.player.realmId)
     const monsterIndex = huntIndex(realm, parsed.player.monsterIndex)
-    const player = {
+    const player = migratePlayer({
       ...parsed.player,
       essences: parsed.player.essences ?? {},
       highestRealmId: Math.max(parsed.player.highestRealmId ?? parsed.player.realmId, parsed.player.realmId),
+      progressRealmId: parsed.player.progressRealmId || parsed.player.realmId,
       monsterIndex,
       queuedMonsterIndex: huntIndex(realm, parsed.player.queuedMonsterIndex ?? monsterIndex),
-    }
+      hunt: parsed.player.hunt ?? {
+        killsTowardElite: 0,
+        board: 1,
+        finalBossCleared: false,
+        contracts: [],
+      },
+    })
     const items = parsed.items
       .map((item) => normalizeItem(item))
       .filter((item): item is Item => item !== null)
@@ -123,6 +131,10 @@ export async function runSettlement(
           scrap: data.scrap ?? 0,
           drops: data.drops ?? 0,
           seconds: data.seconds ?? 0,
+          elites: data.elites ?? 0,
+          fulfilledHunts: Array.isArray(data.fulfilledHunts)
+            ? data.fulfilledHunts.filter((title: unknown): title is string => typeof title === 'string')
+            : [],
         },
         remote: true,
       }

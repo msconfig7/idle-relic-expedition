@@ -1,6 +1,7 @@
 import { realms } from '../../content/realms'
 import { REALM_PROGRESS_CAP } from '../../game'
 import { nextRealm } from '../../game'
+import { wardenAwaits } from '../../game/boss'
 import { useGameStore } from '../../state/gameStore'
 import { Modal } from '../ui/Modal'
 
@@ -12,7 +13,9 @@ export function RealmSelectModal() {
 
   return (
     <Modal title="Choose realm" onClose={close}>
-      <p className="text-xs text-stone-500">Travel to any realm you have already opened.</p>
+      <p className="text-xs text-stone-500">
+        Fill a realm, then defeat its warden to open the next road.
+      </p>
       <div className="mt-3 grid gap-2">
         {realms.map((realm) => {
           const unlocked = realm.id <= highest
@@ -47,7 +50,15 @@ export function RealmSelectModal() {
                 <div className="absolute bottom-2 left-3 right-3">
                   <p className="font-serif text-base text-amber-50">{realm.name}</p>
                   <p className="text-[11px] text-stone-300">
-                    {current ? 'Current' : unlocked ? (cleared ? 'Cleared' : 'Open') : 'Locked'}
+                    {current
+                      ? 'Current'
+                      : unlocked
+                        ? cleared
+                          ? 'Cleared'
+                          : wardenAwaits(player, realm.id)
+                            ? 'Warden awaits'
+                            : 'Open'
+                        : 'Locked'}
                   </p>
                 </div>
               </div>

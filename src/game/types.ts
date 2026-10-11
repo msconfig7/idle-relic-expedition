@@ -1,5 +1,7 @@
-export const CONTENT_VERSION = 2
+export const CONTENT_VERSION = 3
 export const REALM_PROGRESS_CAP = 10_000
+export const ELITE_EVERY = 8
+export const BOSS_FAIL_MS = 2_600
 export const TICK_MS = 125
 export const PERSIST_MS = 12_000
 export const STARTING_DIAMONDS = 50
@@ -148,8 +150,10 @@ export type PlayerState = {
   realmId: number
   highestRealmId: number
   realmProgress: number
+  progressRealmId: number
   monsterIndex: number
   queuedMonsterIndex: number
+  hunt: HuntState
   skillPointsUnspent: number
   allocatedNodeIds: number[]
   lastSettledAt: number
@@ -157,6 +161,25 @@ export type PlayerState = {
 }
 
 export type DerivedStats = Record<StatKey, number>
+
+export type MonsterTrait = {
+  name: string
+  blurb: string
+  regen?: number
+  enrageBelow?: number
+  enrageAttack?: number
+  enrageSwing?: number
+  phase?: number
+  thorns?: number
+  burn?: number
+  poison?: number
+  leech?: number
+  swingScale?: number
+  suppressRegen?: number
+  ambush?: number
+  block?: number
+  auraBurn?: number
+}
 
 export type MonsterDef = {
   id: string
@@ -170,6 +193,8 @@ export type MonsterDef = {
   progress: number
   itemDrop: number
   materialDrop: number
+  trait: MonsterTrait
+  timeLimitMs?: number
 }
 
 export type RealmDef = {
@@ -210,6 +235,37 @@ export type LiveMonster = {
   def: MonsterDef
   hp: number
   maxHp: number
+  elite: boolean
+  boss: boolean
+}
+
+export type HuntKind = 'monster' | 'elite' | 'realm'
+
+export type HuntReward = {
+  gold: number
+  scrap: number
+  essenceId: string
+  essence: number
+}
+
+export type HuntContract = {
+  id: string
+  kind: HuntKind
+  title: string
+  detail: string
+  monsterId: string | null
+  realmId: number
+  target: number
+  progress: number
+  claimed: boolean
+  reward: HuntReward
+}
+
+export type HuntState = {
+  killsTowardElite: number
+  board: number
+  finalBossCleared: boolean
+  contracts: HuntContract[]
 }
 
 export type CombatLogEntry = {
@@ -235,6 +291,16 @@ export type CombatSnapshot = {
   encounter: number
   log: CombatLogEntry[]
   floats: FloatingHit[]
+  bossTimeLeftMs: number
+  bossPauseMs: number
+  bossFailed: boolean
+  ambushReady: boolean
+  enraged: boolean
+  burnMs: number
+  burnDps: number
+  poisonMs: number
+  poisonDps: number
+  dotBuffer: number
 }
 
 export type RealmTheme = {
@@ -262,6 +328,8 @@ export type OfflineGrant = {
   scrap: number
   drops: number
   seconds: number
+  elites: number
+  fulfilledHunts: string[]
 }
 
 export type ItemBase = {

@@ -286,3 +286,63 @@ textarea {
   text-shadow: 0 0 16px rgba(248, 113, 113, 0.9);
   animation: forge-hit-label 2400ms ease-out forwards;
 }
+
+@keyframes hunt-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hunt-toast {
+  animation: hunt-toast-in 280ms ease-out;
+}
+
+@keyframes contract-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.28);
+  }
+}
+
+.contract-ready {
+  animation: contract-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes contract-deal {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.contract-deal {
+  animation: contract-deal 420ms ease-out both;
+}
+
+.contract-stamp {
+  position: absolute;
+  right: 0.8rem;
+  top: 1.4rem;
+  padding: 0.1rem 0.45rem;
+  border: 2px solid rgba(248, 113, 113, 0.85);
+  border-radius: 0.25rem;
+  color: #fca5a5;
+  font-family: ui-serif, Georgia, serif;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-14deg);
+  animation: contract-deal 220ms ease-out both;
+}

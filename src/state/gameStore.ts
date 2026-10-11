@@ -1,3 +1,4 @@
+import { bossForRealm } from '../content/bosses'
 import { allocationRemainsConnected, canAllocateNode, prunePending } from '../content/skillTree'
 import {
   applyEquip,
@@ -7,17 +8,33 @@ import {
   getRealm,
   huntIndex,
   levelFromTotalXp,
-  nextRealm,
   pickMonster,
   spawnMonster,
   strikeDamage,
 } from '../game'
+import { grantBossVictory, wardenAwaits, type RealmDoor } from '../game/boss'
+import { claimHunt, claimable, dueElite, noteKill } from '../game/contracts'
+import { spawnBoss } from '../game/combat'
+import {
+  DOT_MS,
+  attackScale,
+  auraDps,
+  avoided,
+  foeName,
+  hitDots,
+  isEnraged,
+  leechHeal,
+  monsterSwingLimit,
+  suppressRegen,
+  thornsDamage,
+} from '../game/fight'
+import { migratePlayer } from '../game/migrate'
 import { ascendItem as ascendItemCraft, rerollItemMod as rerollItemModCraft, temperItem as temperItemCraft } from '../game/craft'
 import type { CraftOutcome } from '../game/craft'
 import { salvageScrap } from '../game/salvage'
 import { essenceName } from '../content/essences'
-import { REALM_PROGRESS_CAP, START_NODE_ID, TICK_MS } from '../game/types'
-import { DEATH_COOLDOWN_MS, DESPAWN_MS, PLAYER_SWING_MS, MONSTER_SWING_MS } from '../game/types'
+import { BOSS_FAIL_MS, START_NODE_ID, TICK_MS } from '../game/types'
+import { DEATH_COOLDOWN_MS, DESPAWN_MS, PLAYER_SWING_MS } from '../game/types'
 import { mulberry32, hashSeed } from '../game/rng'
 import type {
   CombatLogEntry,
@@ -74,6 +91,10 @@ type GameStore = {
   pendingRemovalNodeIds: number[]
   realmPickerOpen: boolean
   offlineGrant: OfflineGrant | null
+  huntsOpen: boolean
+  huntNotices: { id: string; title: string }[]
+  realmDoor: RealmDoor | null
+  bossFled: boolean
   error: string | null
   hydrate: (player: PlayerState, items: Item[], knownItemIds?: string[]) => void
   setScreen: (screen: ScreenId) => void
@@ -96,6 +117,15 @@ type GameStore = {
   openRealmPicker: () => void
   closeRealmPicker: () => void
   selectRealm: (realmId: number) => void
+  openHunts: () => void
+  closeHunts: () => void
+  claimContract: (
+    id: string,
+  ) => { ok: true; refreshed: boolean; rewardText: string } | { ok: false; reason: string }
+  challengeBoss: () => void
+  resumeBoss: (awayMs: number) => boolean
+  acknowledgeDoor: () => void
+  acknowledgeBossFled: () => void
   acknowledgeOffline: () => void
   markClean: () => void
   setPaused: (paused: boolean) => void
@@ -148,7 +178,7 @@ function rebuildCombat(
   const def = pickMonster(realm, monsterIndex)
   const keepHp = previous ? Math.min(previous.playerHp, stats.hp) : stats.hp
   return {
-    monster: spawnMonster(def),
+    monster: spawnMonster(def, dueElite(player)),
     playerHp: previous?.deathCooldownMs ? 0 : keepHp,
     playerMaxHp: stats.hp,
     playerSwing: 0,
@@ -158,6 +188,16 @@ function rebuildCombat(
     encounter: (previous?.encounter ?? 0) + 1,
     log: previous?.log ?? [],
     floats: [],
+    bossTimeLeftMs: 0,
+    bossPauseMs: 0,
+    bossFailed: false,
+    ambushReady: true,
+    enraged: false,
+    burnMs: 0,
+    burnDps: 0,
+    poisonMs: 0,
+    poisonDps: 0,
+    dotBuffer: 0,
   }
 }
 
@@ -178,19 +218,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
   pendingRemovalNodeIds: [],
   realmPickerOpen: false,
   offlineGrant: null,
+  huntsOpen: false,
+  huntNotices: [],
+  realmDoor: null,
+  bossFled: false,
   error: null,
 
   hydrate: (player, items, knownItemIds) => {
-    let highestRealmId = Math.max(player.highestRealmId ?? 1, player.realmId)
-    if (player.realmProgress >= REALM_PROGRESS_CAP) {
-      const nxt = nextRealm(player.realmId)
-      if (nxt) highestRealmId = Math.max(highestRealmId, nxt.id)
-    }
-    const synced = {
+    const synced = migratePlayer({
       ...player,
       level: levelFromTotalXp(player.xp),
-      highestRealmId,
-    }
+      highestRealmId: Math.max(player.highestRealmId ?? 1, player.realmId),
+    })
     const stats = deriveStats(synced, items)
     const realm = getRealm(synced.realmId)
     const monsterIndex = huntIndex(realm, synced.monsterIndex)
@@ -213,6 +252,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       unseenItemIds,
       pendingNodeIds: [],
       pendingRemovalNodeIds: [],
+      huntNotices: claimable(resumed.hunt).map((contract) => ({ id: contract.id, title: contract.title })),
       dirty: false,
     })
   },
@@ -238,11 +278,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   setPaused: (paused) => set({ paused }),
   markClean: () => set({ dirty: false }),
-  acknowledgeOffline: () => set({ offlineGrant: null }),
+  acknowledgeOffline: () => set({ offlineGrant: null, bossFled: false }),
 
   queueMonster: (index) => {
-    const { player } = get()
+    const { player, combat } = get()
     if (!player) return
+    if (combat?.monster.boss && combat.monster.hp > 0 && combat.bossPauseMs === 0 && combat.deathCooldownMs === 0) return
     const realm = getRealm(player.realmId)
     const nextIndex = huntIndex(realm, index)
     set({
@@ -261,6 +302,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let nextStats = stats
     let nextMonsterIndex = monsterIndex
     let dirty = false
+    let nextUnseen = get().unseenItemIds
+    let huntNotices = get().huntNotices
+    let realmDoor = get().realmDoor
 
     if (combat.deathCooldownMs > 0) {
       const remaining = Math.max(0, combat.deathCooldownMs - dt)
@@ -272,6 +316,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         playerMaxHp: stats.hp,
         playerSwing: 0,
         monsterSwing: 0,
+        bossFailed: revived ? false : combat.bossFailed,
         log: combat.log,
         floats: combat.floats.slice(-6),
       }
@@ -281,6 +326,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ...nextCombat,
           playerHp: stats.hp,
           deathCooldownMs: 0,
+          bossFailed: false,
         })
       }
       set({
@@ -288,6 +334,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
         combat: nextCombat,
         monsterIndex: nextMonsterIndex,
         dirty: get().dirty || nextMonsterIndex !== monsterIndex,
+      })
+      return
+    }
+
+    if (combat.bossPauseMs > 0) {
+      const remaining = Math.max(0, combat.bossPauseMs - dt)
+      if (remaining > 0) {
+        set({ combat: { ...combat, bossPauseMs: remaining } })
+        return
+      }
+      const spawnedIndex = queuedMonsterIndex
+      const indexChanged = spawnedIndex !== player.monsterIndex
+      set({
+        player: indexChanged ? { ...player, monsterIndex: spawnedIndex } : player,
+        combat: rebuildCombat(player, stats, spawnedIndex, { ...combat, bossPauseMs: 0 }),
+        monsterIndex: spawnedIndex,
+        dirty: get().dirty || indexChanged,
       })
       return
     }
@@ -313,99 +376,199 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return
     }
 
-    let nextCombat = {
+    if (combat.monster.boss && combat.monster.hp > 0 && combat.bossTimeLeftMs - dt <= 0) {
+      set({
+        combat: {
+          ...combat,
+          bossTimeLeftMs: 0,
+          bossPauseMs: BOSS_FAIL_MS,
+          log: pushLog(combat.log, `${foeName(combat.monster)} outlasts you.`),
+        },
+      })
+      return
+    }
+
+    let nextCombat: CombatSnapshot = {
       ...combat,
       playerSwing: combat.playerSwing + dt,
       monsterSwing: combat.monsterSwing + dt,
       floats: combat.floats.slice(-6),
       playerMaxHp: stats.hp,
+      bossTimeLeftMs: combat.monster.boss ? Math.max(0, combat.bossTimeLeftMs - dt) : 0,
     }
-    let nextUnseen = get().unseenItemIds
-    if (nextCombat.playerHp > 0 && nextCombat.playerHp < nextStats.hp) {
-      nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + nextStats.hpRegen * (dt / 1000))
-    }
-    const rng = mulberry32(hashSeed(`${player.id}:${player.xp}:${combat.monster.hp}:${Date.now()}`))
-
-    if (nextCombat.playerSwing >= PLAYER_SWING_MS) {
-      nextCombat.playerSwing = 0
-      const hit = strikeDamage(
-        nextStats.attack,
-        nextCombat.monster.def.defense,
-        nextStats.critChance,
-        nextStats.critMulti,
-        rng,
+    const suppress = suppressRegen(nextCombat.monster)
+    if (nextCombat.playerHp > 0 && nextCombat.playerHp < nextStats.hp && suppress < 1) {
+      nextCombat.playerHp = Math.min(
+        nextStats.hp,
+        nextCombat.playerHp + nextStats.hpRegen * (1 - suppress) * (dt / 1000),
       )
-      const hp = Math.max(0, nextCombat.monster.hp - hit.damage)
+    }
+    const regen = nextCombat.monster.def.trait.regen ?? 0
+    if (regen > 0 && nextCombat.monster.hp > 0 && nextCombat.monster.hp < nextCombat.monster.maxHp) {
       nextCombat = {
         ...nextCombat,
-        monster: { ...nextCombat.monster, hp },
-        floats: pushFloat(nextCombat.floats, `${hit.damage}${hit.crit ? '!' : ''}`, hit.crit ? 'crit' : 'player'),
+        monster: {
+          ...nextCombat.monster,
+          hp: Math.min(nextCombat.monster.maxHp, nextCombat.monster.hp + nextCombat.monster.maxHp * regen * (dt / 1000)),
+        },
       }
-      const steal =
-        nextStats.lifeSteal > 0 && nextCombat.playerHp > 0
-          ? Math.max(1, Math.round(hit.damage * nextStats.lifeSteal))
-          : 0
-      if (steal > 0) {
-        const beforeHp = nextCombat.playerHp
-        nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + steal)
-        const gained = nextCombat.playerHp - beforeHp
-        if (gained > 0) {
-          nextCombat.floats = pushFloat(nextCombat.floats, `+${Math.round(gained)}`, 'heal')
-        }
+    }
+    let dotBuffer = nextCombat.dotBuffer
+    const burnMs = Math.max(0, nextCombat.burnMs - dt)
+    const poisonMs = Math.max(0, nextCombat.poisonMs - dt)
+    if (nextCombat.burnMs > 0) dotBuffer += nextCombat.burnDps * (dt / 1000)
+    if (nextCombat.poisonMs > 0) dotBuffer += nextCombat.poisonDps * (dt / 1000)
+    const burningAura = auraDps(nextCombat.monster)
+    if (burningAura > 0 && nextCombat.monster.hp > 0) dotBuffer += burningAura * (dt / 1000)
+    const dotHit = Math.floor(dotBuffer)
+    nextCombat = {
+      ...nextCombat,
+      dotBuffer: dotBuffer - dotHit,
+      burnMs,
+      poisonMs,
+      burnDps: burnMs > 0 ? nextCombat.burnDps : 0,
+      poisonDps: poisonMs > 0 ? nextCombat.poisonDps : 0,
+    }
+    const downed = (snapshot: CombatSnapshot, wasBoss: boolean): CombatSnapshot => {
+      nextMonsterIndex = queuedMonsterIndex
+      const spawned = rebuildCombat(nextPlayer, nextStats, nextMonsterIndex, {
+        ...snapshot,
+        deathCooldownMs: DEATH_COOLDOWN_MS,
+      })
+      return {
+        ...spawned,
+        playerHp: 0,
+        deathCooldownMs: DEATH_COOLDOWN_MS,
+        bossFailed: wasBoss,
+        log: snapshot.log,
+        floats: snapshot.floats,
       }
-      if (hp <= 0) {
-        const result = applyKill(nextPlayer, nextItems, nextCombat.monster, nextStats, rng)
-        nextPlayer = result.player
-        nextItems = result.items
-        nextStats = deriveStats(nextPlayer, nextItems)
-        dirty = true
-        let killLog = nextCombat.log
-        if (result.reward.item) killLog = pushLog(killLog, result.reward.item.name, result.reward.item.rarity)
-        if (result.reward.essenceId) killLog = pushLog(killLog, `+1 ${essenceName(result.reward.essenceId)}`)
+    }
+    if (dotHit > 0 && nextCombat.playerHp > 0) {
+      const beforeHp = nextCombat.playerHp
+      nextCombat.playerHp = Math.max(0, nextCombat.playerHp - dotHit)
+      if (beforeHp > nextCombat.playerHp) {
+        nextCombat.floats = pushFloat(nextCombat.floats, `${dotHit}`, 'monster')
+      }
+    }
+    const rng = mulberry32(hashSeed(`${player.id}:${player.xp}:${Math.floor(combat.monster.hp)}:${Date.now()}`))
+    const markEnrage = () => {
+      if (!nextCombat.enraged && isEnraged(nextCombat.monster)) {
         nextCombat = {
           ...nextCombat,
-          monster: { ...nextCombat.monster, hp: 0 },
-          despawnMs: DESPAWN_MS,
-          log: killLog,
-        }
-        if (result.reward.item) {
-          const bagIds = new Set(nextItems.filter((item) => !item.equippedSlot).map((item) => item.id))
-          nextUnseen = mergeUnseen(nextPlayer.id, nextUnseen, [result.reward.item.id], bagIds)
+          enraged: true,
+          log: pushLog(nextCombat.log, `${foeName(nextCombat.monster)} is enraged.`),
         }
       }
     }
 
-    if (nextCombat.monster.hp > 0 && nextCombat.monsterSwing >= MONSTER_SWING_MS) {
-      nextCombat.monsterSwing = 0
-      if (rng() < nextStats.block) {
-        nextCombat = {
-          ...nextCombat,
-          floats: pushFloat(nextCombat.floats, 'BLOCK', 'block'),
-        }
+    if (nextCombat.playerHp > 0 && nextCombat.playerSwing >= PLAYER_SWING_MS && nextCombat.monster.hp > 0) {
+      nextCombat.playerSwing = 0
+      const dodge = avoided(nextCombat.monster, rng)
+      if (dodge) {
+        nextCombat.floats = pushFloat(nextCombat.floats, dodge === 'guard' ? 'GUARD' : 'PHASE', 'block')
       } else {
-        const hit = strikeDamage(nextCombat.monster.def.attack, nextStats.defense, 0.05, 1.4, rng)
-        const beforeHp = nextCombat.playerHp
-        const hp = Math.max(0, nextCombat.playerHp - hit.damage)
+        const hit = strikeDamage(
+          nextStats.attack,
+          nextCombat.monster.def.defense,
+          nextStats.critChance,
+          nextStats.critMulti,
+          rng,
+        )
+        const hp = Math.max(0, nextCombat.monster.hp - hit.damage)
         nextCombat = {
           ...nextCombat,
-          playerHp: hp,
-          floats:
-            beforeHp > hp
-              ? pushFloat(nextCombat.floats, `${hit.damage}`, 'monster')
-              : nextCombat.floats,
+          monster: { ...nextCombat.monster, hp },
+          floats: pushFloat(nextCombat.floats, `${hit.damage}${hit.crit ? '!' : ''}`, hit.crit ? 'crit' : 'player'),
         }
+        const stealRate = nextStats.lifeSteal * (1 - suppress)
+        const steal = stealRate > 0 && nextCombat.playerHp > 0 ? Math.max(1, Math.round(hit.damage * stealRate)) : 0
+        if (steal > 0) {
+          const beforeHp = nextCombat.playerHp
+          nextCombat.playerHp = Math.min(nextStats.hp, nextCombat.playerHp + steal)
+          const gained = nextCombat.playerHp - beforeHp
+          if (gained > 0) nextCombat.floats = pushFloat(nextCombat.floats, `+${Math.round(gained)}`, 'heal')
+        }
+        markEnrage()
         if (hp <= 0) {
-          nextMonsterIndex = queuedMonsterIndex
-          const downedRealm = getRealm(nextPlayer.realmId)
+          const slain = nextCombat.monster
+          const result = applyKill(nextPlayer, nextItems, slain, nextStats, rng)
+          const noted = noteKill(result.player, {
+            monsterId: slain.def.id,
+            realmId: nextPlayer.realmId,
+            elite: slain.elite,
+            boss: slain.boss,
+          })
+          nextPlayer = noted.player
+          if (slain.boss) {
+            const victory = grantBossVictory(nextPlayer)
+            nextPlayer = victory.player
+            realmDoor = victory.door
+          }
+          nextItems = result.items
+          nextStats = deriveStats(nextPlayer, nextItems)
+          dirty = true
+          let killLog = nextCombat.log
+          if (slain.elite || slain.boss) killLog = pushLog(killLog, `${foeName(slain)} falls`)
+          if (result.reward.item) killLog = pushLog(killLog, result.reward.item.name, result.reward.item.rarity)
+          if (result.reward.essenceId) killLog = pushLog(killLog, `+1 ${essenceName(result.reward.essenceId)}`)
+          for (const contract of noted.fulfilled) {
+            killLog = pushLog(killLog, `Hunt fulfilled — ${contract.title}`)
+            if (!huntNotices.some((notice) => notice.id === contract.id)) {
+              huntNotices = [...huntNotices, { id: contract.id, title: contract.title }]
+            }
+          }
           nextCombat = {
             ...nextCombat,
-            playerHp: 0,
-            deathCooldownMs: DEATH_COOLDOWN_MS,
-            playerSwing: 0,
-            monsterSwing: 0,
-            monster: spawnMonster(pickMonster(downedRealm, nextMonsterIndex)),
+            monster: { ...slain, hp: 0 },
+            despawnMs: DESPAWN_MS,
+            log: killLog,
+          }
+          if (result.reward.item) {
+            const bagIds = new Set(nextItems.filter((item) => !item.equippedSlot).map((item) => item.id))
+            nextUnseen = mergeUnseen(nextPlayer.id, nextUnseen, [result.reward.item.id], bagIds)
+          }
+        } else {
+          const reflected = thornsDamage(nextCombat.monster, hit.damage)
+          if (reflected > 0 && nextCombat.playerHp > 0) {
+            nextCombat.playerHp = Math.max(0, nextCombat.playerHp - reflected)
+            nextCombat.floats = pushFloat(nextCombat.floats, `${reflected}`, 'monster')
           }
         }
+      }
+    }
+
+    if (nextCombat.playerHp <= 0) {
+      nextCombat = downed(nextCombat, combat.monster.boss)
+    } else if (nextCombat.monster.hp > 0 && nextCombat.monsterSwing >= monsterSwingLimit(nextCombat.monster)) {
+      nextCombat.monsterSwing = 0
+      if (rng() < nextStats.block) {
+        nextCombat.floats = pushFloat(nextCombat.floats, 'BLOCK', 'block')
+      } else {
+        const scaled = attackScale(nextCombat.monster, nextCombat.ambushReady)
+        const hit = strikeDamage(nextCombat.monster.def.attack, nextStats.defense, 0.05, 1.4, rng)
+        const damage = Math.max(1, Math.floor(hit.damage * scaled.scale))
+        const beforeHp = nextCombat.playerHp
+        const hp = Math.max(0, nextCombat.playerHp - damage)
+        const healed = leechHeal(nextCombat.monster, damage)
+        const dots = hitDots(nextCombat.monster)
+        nextCombat = {
+          ...nextCombat,
+          ambushReady: scaled.ambushReady,
+          playerHp: hp,
+          burnMs: dots.burn > 0 ? DOT_MS : nextCombat.burnMs,
+          burnDps: dots.burn > 0 ? dots.burn : nextCombat.burnDps,
+          poisonMs: dots.poison > 0 ? DOT_MS : nextCombat.poisonMs,
+          poisonDps: dots.poison > 0 ? dots.poison : nextCombat.poisonDps,
+          monster: healed
+            ? {
+                ...nextCombat.monster,
+                hp: Math.min(nextCombat.monster.maxHp, nextCombat.monster.hp + healed),
+              }
+            : nextCombat.monster,
+          floats: beforeHp > hp ? pushFloat(nextCombat.floats, `${damage}`, 'monster') : nextCombat.floats,
+        }
+        if (hp <= 0) nextCombat = downed(nextCombat, combat.monster.boss)
       }
     }
 
@@ -420,6 +583,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       combat: nextCombat,
       monsterIndex: nextMonsterIndex,
       unseenItemIds: nextUnseen,
+      huntNotices,
+      realmDoor,
       dirty: get().dirty || dirty,
     })
   },
@@ -611,22 +776,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ pendingNodeIds: [], pendingRemovalNodeIds: [], error: null })
   },
 
-  openRealmPicker: () => set({ realmPickerOpen: true }),
+  openRealmPicker: () => {
+    const { combat } = get()
+    if (combat?.monster.boss && combat.monster.hp > 0 && combat.bossPauseMs === 0 && combat.deathCooldownMs === 0) return
+    set({ realmPickerOpen: true })
+  },
   closeRealmPicker: () => set({ realmPickerOpen: false }),
 
   selectRealm: (realmId) => {
     const { player, items, combat } = get()
     if (!player) return
+    if (combat?.monster.boss && combat.monster.hp > 0 && combat.bossPauseMs === 0 && combat.deathCooldownMs === 0) return
     if (realmId > player.highestRealmId) return
     if (realmId === player.realmId) {
       set({ realmPickerOpen: false })
       return
     }
     let realmProgress = player.realmProgress
-    if (realmId === player.highestRealmId && player.realmId !== realmId && player.realmProgress >= REALM_PROGRESS_CAP) {
+    let progressRealmId = player.progressRealmId
+    if (realmId === player.highestRealmId && progressRealmId !== realmId) {
       realmProgress = 0
+      progressRealmId = realmId
     }
-    const nextPlayer = { ...player, realmId, realmProgress, monsterIndex: 0, queuedMonsterIndex: 0 }
+    const nextPlayer = { ...player, realmId, realmProgress, progressRealmId, monsterIndex: 0, queuedMonsterIndex: 0 }
     const stats = deriveStats(nextPlayer, items)
     set({
       player: nextPlayer,
@@ -638,6 +810,82 @@ export const useGameStore = create<GameStore>((set, get) => ({
       dirty: true,
     })
   },
+
+  openHunts: () => set({ huntsOpen: true, huntNotices: [] }),
+  closeHunts: () => set({ huntsOpen: false }),
+
+  claimContract: (id) => {
+    const { player, huntNotices } = get()
+    if (!player) return { ok: false, reason: 'Not ready.' }
+    const outcome = claimHunt(player, id)
+    if (!outcome.ok) return outcome
+    set({
+      player: outcome.player,
+      huntNotices: huntNotices.filter((notice) => notice.id !== id),
+      dirty: true,
+    })
+    return { ok: true, refreshed: outcome.refreshed, rewardText: outcome.rewardText }
+  },
+
+  challengeBoss: () => {
+    const { player, stats, combat } = get()
+    if (!player || !stats || !combat || !wardenAwaits(player)) return
+    if (combat.monster.boss && combat.monster.hp > 0) return
+    const boss = bossForRealm(player.realmId)
+    if (!boss) return
+    set({
+      screen: 'combat',
+      combat: {
+        ...combat,
+        monster: spawnBoss(boss),
+        playerHp: stats.hp,
+        playerMaxHp: stats.hp,
+        playerSwing: 0,
+        monsterSwing: 0,
+        deathCooldownMs: 0,
+        despawnMs: 0,
+        encounter: combat.encounter + 1,
+        bossTimeLeftMs: boss.timeLimitMs,
+        bossPauseMs: 0,
+        bossFailed: false,
+        ambushReady: true,
+        enraged: false,
+        burnMs: 0,
+        burnDps: 0,
+        poisonMs: 0,
+        poisonDps: 0,
+        dotBuffer: 0,
+        floats: [],
+        log: pushLog(combat.log, `${boss.name} answers.`),
+      },
+    })
+  },
+
+  resumeBoss: (awayMs) => {
+    const { combat } = get()
+    const live =
+      !!combat?.monster.boss && combat.monster.hp > 0 && combat.deathCooldownMs === 0 && combat.bossPauseMs === 0
+    if (!live || !combat) return false
+    if (awayMs >= 8_000) return false
+    const left = combat.bossTimeLeftMs - awayMs
+    if (left <= 0) {
+      set({
+        paused: false,
+        combat: {
+          ...combat,
+          bossTimeLeftMs: 0,
+          bossPauseMs: BOSS_FAIL_MS,
+          log: pushLog(combat.log, `${foeName(combat.monster)} outlasts you.`),
+        },
+      })
+      return true
+    }
+    set({ paused: false, combat: { ...combat, bossTimeLeftMs: left } })
+    return true
+  },
+
+  acknowledgeDoor: () => set({ realmDoor: null }),
+  acknowledgeBossFled: () => set({ bossFled: false }),
 
   persistNow: async () => {
     const { player, items } = get()

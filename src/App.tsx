@@ -79,21 +79,33 @@ export function App() {
   }, [ready])
 
   useEffect(() => {
+    let hiddenAt = 0
     const onHide = () => {
-      const { player, items } = useGameStore.getState()
+      hiddenAt = Date.now()
+      const state = useGameStore.getState()
+      if (state.ready) state.setPaused(true)
+      const { player, items } = state
       if (player) void persistSave({ ...player, lastSettledAt: Date.now() }, items)
     }
     const onFocus = () => {
-      const { player, items, ready: isReady } = useGameStore.getState()
+      const { player, items, ready: isReady, combat } = useGameStore.getState()
       if (!isReady || !player) return
+      const away = hiddenAt ? Date.now() - hiddenAt : 0
+      hiddenAt = 0
       useGameStore.getState().setPaused(true)
+      const bossLive =
+        !!combat?.monster.boss && combat.monster.hp > 0 && combat.deathCooldownMs === 0 && combat.bossPauseMs === 0
+      if (useGameStore.getState().resumeBoss(away)) return
       void runSettlement(player, items).then(({ grant }) => {
         useGameStore.getState().hydrate(
           grant.player,
           grant.items,
           items.map((item) => item.id),
         )
-        if (grant.kills > 0) useGameStore.setState({ offlineGrant: grant })
+        useGameStore.setState({
+          offlineGrant: grant.kills > 0 ? grant : null,
+          bossFled: bossLive,
+        })
         useGameStore.getState().setPaused(false)
       })
     }

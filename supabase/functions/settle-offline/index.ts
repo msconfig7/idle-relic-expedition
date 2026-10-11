@@ -100,6 +100,8 @@ Deno.serve(async (req) => {
     scrap: grant.scrap,
     drops: grant.drops,
     seconds: grant.seconds,
+    elites: grant.elites,
+    fulfilledHunts: grant.fulfilledHunts,
   })
 })
 

@@ -1,4 +1,5 @@
 import { realms } from '../content/realms'
+import { amplifyTrait } from './fight'
 import { REALM_PROGRESS_CAP } from './types'
 import type { LiveMonster, MonsterDef, RealmDef } from './types'
 
@@ -26,8 +27,28 @@ export function pickMonster(realm: RealmDef, killIndex: number): MonsterDef {
   return realm.monsters[huntIndex(realm, killIndex)]
 }
 
-export function spawnMonster(def: MonsterDef): LiveMonster {
-  return { def, hp: def.hp, maxHp: def.hp }
+export function eliteScaled(def: MonsterDef): MonsterDef {
+  return {
+    ...def,
+    hp: Math.max(1, Math.round(def.hp * 1.8)),
+    attack: Math.max(1, Math.round(def.attack * 1.35)),
+    defense: Math.max(0, Math.round(def.defense * 1.2)),
+    xp: Math.max(1, Math.round(def.xp * 2.4)),
+    gold: Math.max(1, Math.round(def.gold * 2.4)),
+    progress: Math.max(1, Math.round(def.progress * 1.75)),
+    itemDrop: def.itemDrop * 2.2,
+    materialDrop: Math.min(0.9, def.materialDrop * 1.8),
+    trait: amplifyTrait(def.trait),
+  }
+}
+
+export function spawnMonster(def: MonsterDef, elite = false): LiveMonster {
+  const next = elite ? eliteScaled(def) : def
+  return { def: next, hp: next.hp, maxHp: next.hp, elite, boss: false }
+}
+
+export function spawnBoss(def: MonsterDef): LiveMonster {
+  return { def, hp: def.hp, maxHp: def.hp, elite: false, boss: true }
 }
 
 export function strikeDamage(
@@ -42,6 +63,22 @@ export function strikeDamage(
   const crit = rng() < critChance
   const damage = Math.max(1, Math.floor(raw * spread * (crit ? critMulti : 1)))
   return { damage, crit }
+}
+
+export function timeToKillMs(
+  attack: number,
+  critChance: number,
+  critMulti: number,
+  def: MonsterDef,
+  swingMs: number,
+): number {
+  const avoid = Math.min(0.75, (def.trait.phase ?? 0) + (def.trait.block ?? 0))
+  const hit = Math.max(1, attack - def.defense * 0.4)
+  const expected = hit * (1 - critChance + critChance * critMulti) * (1 - avoid)
+  const regenPerHit = (def.trait.regen ?? 0) * def.hp * (swingMs / 1000)
+  const net = expected - regenPerHit
+  if (net <= 0.25) return def.hp * swingMs * 4
+  return Math.max(swingMs, Math.ceil(def.hp / net) * swingMs)
 }
 
 export function averageTimeToKillMs(

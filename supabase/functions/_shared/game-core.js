@@ -22,7 +22,12 @@ var realms = [
 				gold: 3,
 				progress: 55,
 				itemDrop: .012,
-				materialDrop: .14
+				materialDrop: .14,
+				trait: {
+					name: "Mote Drift",
+					blurb: "Loose dust knits back together while it fights.",
+					regen: .012
+				}
 			},
 			{
 				id: "road-gnoll",
@@ -35,7 +40,14 @@ var realms = [
 				gold: 4,
 				progress: 62,
 				itemDrop: .014,
-				materialDrop: .13
+				materialDrop: .13,
+				trait: {
+					name: "Pack Frenzy",
+					blurb: "Below half health it snarls, swinging faster and harder.",
+					enrageBelow: .5,
+					enrageAttack: 1.3,
+					enrageSwing: .72
+				}
 			},
 			{
 				id: "lost-shade",
@@ -48,7 +60,12 @@ var realms = [
 				gold: 4,
 				progress: 68,
 				itemDrop: .015,
-				materialDrop: .12
+				materialDrop: .12,
+				trait: {
+					name: "Phase Veil",
+					blurb: "The shade lets blades pass through.",
+					phase: .18
+				}
 			},
 			{
 				id: "waystone-brute",
@@ -61,7 +78,13 @@ var realms = [
 				gold: 7,
 				progress: 80,
 				itemDrop: .018,
-				materialDrop: .16
+				materialDrop: .16,
+				trait: {
+					name: "Stonehide",
+					blurb: "Waystone skin turns hits and bites back.",
+					thorns: .16,
+					block: .12
+				}
 			}
 		]
 	},
@@ -87,7 +110,12 @@ var realms = [
 				gold: 9,
 				progress: 48,
 				itemDrop: .016,
-				materialDrop: .15
+				materialDrop: .15,
+				trait: {
+					name: "Skitter",
+					blurb: "Too many legs. It reaches you early.",
+					swingScale: .75
+				}
 			},
 			{
 				id: "drowned-acolyte",
@@ -100,7 +128,12 @@ var realms = [
 				gold: 11,
 				progress: 54,
 				itemDrop: .018,
-				materialDrop: .14
+				materialDrop: .14,
+				trait: {
+					name: "Salt Rite",
+					blurb: "Drowned prayers dull your recovery.",
+					suppressRegen: .8
+				}
 			},
 			{
 				id: "crypt-guard",
@@ -113,7 +146,12 @@ var realms = [
 				gold: 13,
 				progress: 60,
 				itemDrop: .02,
-				materialDrop: .17
+				materialDrop: .17,
+				trait: {
+					name: "Shield Wall",
+					blurb: "A crypt shield catches the first angle of a blow.",
+					block: .22
+				}
 			},
 			{
 				id: "vault-wraith",
@@ -126,7 +164,14 @@ var realms = [
 				gold: 12,
 				progress: 68,
 				itemDrop: .022,
-				materialDrop: .13
+				materialDrop: .13,
+				trait: {
+					name: "Grave Wail",
+					blurb: "It slips aside, then wails once it is wounded.",
+					phase: .12,
+					enrageBelow: .4,
+					enrageAttack: 1.5
+				}
 			}
 		]
 	},
@@ -152,7 +197,12 @@ var realms = [
 				gold: 18,
 				progress: 42,
 				itemDrop: .02,
-				materialDrop: .16
+				materialDrop: .16,
+				trait: {
+					name: "Cinderbite",
+					blurb: "Each bite leaves a coal burning in the wound.",
+					burn: .22
+				}
 			},
 			{
 				id: "magma-scarab",
@@ -165,7 +215,13 @@ var realms = [
 				gold: 20,
 				progress: 48,
 				itemDrop: .022,
-				materialDrop: .18
+				materialDrop: .18,
+				trait: {
+					name: "Molten Carapace",
+					blurb: "The shell is hot, hard, and slow to crack.",
+					thorns: .2,
+					regen: .006
+				}
 			},
 			{
 				id: "peak-raider",
@@ -178,7 +234,12 @@ var realms = [
 				gold: 24,
 				progress: 54,
 				itemDrop: .024,
-				materialDrop: .15
+				materialDrop: .15,
+				trait: {
+					name: "Ambush",
+					blurb: "The raider’s first strike is the one that matters.",
+					ambush: 2.1
+				}
 			},
 			{
 				id: "ember-tyrant",
@@ -191,7 +252,14 @@ var realms = [
 				gold: 30,
 				progress: 64,
 				itemDrop: .028,
-				materialDrop: .2
+				materialDrop: .2,
+				trait: {
+					name: "Tyrant's Pyre",
+					blurb: "Fire rolls off the tyrant, and pain makes it crueler.",
+					auraBurn: .12,
+					enrageBelow: .35,
+					enrageAttack: 1.4
+				}
 			}
 		]
 	},
@@ -217,7 +285,12 @@ var realms = [
 				gold: 36,
 				progress: 36,
 				itemDrop: .026,
-				materialDrop: .17
+				materialDrop: .17,
+				trait: {
+					name: "Blood Draw",
+					blurb: "The leech drinks a share of every hit it lands.",
+					leech: .4
+				}
 			},
 			{
 				id: "spore-beetle",
@@ -230,7 +303,12 @@ var realms = [
 				gold: 42,
 				progress: 42,
 				itemDrop: .028,
-				materialDrop: .19
+				materialDrop: .19,
+				trait: {
+					name: "Spore Cloud",
+					blurb: "Spores cling and keep feeding after the hit.",
+					poison: .2
+				}
 			},
 			{
 				id: "mire-stalker",
@@ -243,7 +321,13 @@ var realms = [
 				gold: 50,
 				progress: 48,
 				itemDrop: .03,
-				materialDrop: .16
+				materialDrop: .16,
+				trait: {
+					name: "Venom Lunge",
+					blurb: "It strikes from the mire, then leaves venom behind.",
+					ambush: 1.85,
+					poison: .16
+				}
 			},
 			{
 				id: "blight-regent",
@@ -256,7 +340,13 @@ var realms = [
 				gold: 62,
 				progress: 56,
 				itemDrop: .034,
-				materialDrop: .22
+				materialDrop: .22,
+				trait: {
+					name: "Creeping Blight",
+					blurb: "Rot closes its wounds and seeps into yours.",
+					regen: .01,
+					poison: .18
+				}
 			}
 		]
 	}
@@ -318,6 +408,25 @@ var STAT_KEYS = [
 ];
 var RANK_STAT_BONUS = .08;
 //#endregion
+//#region src/game/fight.ts
+function amplifyTrait(trait) {
+	const scale = (value, mul, cap) => value == null ? void 0 : Math.min(cap, Math.round(value * mul * 1e3) / 1e3);
+	const add = (value, extra, cap) => value == null ? void 0 : Math.min(cap, Math.round((value + extra) * 1e3) / 1e3);
+	return {
+		...trait,
+		regen: scale(trait.regen, 1.4, .05),
+		phase: add(trait.phase, .05, .4),
+		thorns: scale(trait.thorns, 1.25, .4),
+		burn: scale(trait.burn, 1.3, .6),
+		poison: scale(trait.poison, 1.3, .6),
+		auraBurn: scale(trait.auraBurn, 1.3, .45),
+		leech: scale(trait.leech, 1.15, .65),
+		block: add(trait.block, .05, .45),
+		ambush: scale(trait.ambush, 1.1, 3.2),
+		enrageAttack: scale(trait.enrageAttack, 1.08, 2.2)
+	};
+}
+//#endregion
 //#region src/game/combat.ts
 function getRealm(realmId) {
 	return realms.find((realm) => realm.id === realmId) ?? realms[0];
@@ -335,15 +444,39 @@ function huntIndex(realm, index) {
 function pickMonster(realm, killIndex) {
 	return realm.monsters[huntIndex(realm, killIndex)];
 }
-function averageTimeToKillMs(playerAttack, playerCritChance, playerCritMulti, monsterHp, monsterDef, swingMs) {
-	const expected = Math.max(1, playerAttack - monsterDef * .4) * (1 - playerCritChance + playerCritChance * playerCritMulti);
-	return Math.max(1, Math.ceil(monsterHp / expected)) * swingMs;
+function eliteScaled(def) {
+	return {
+		...def,
+		hp: Math.max(1, Math.round(def.hp * 1.8)),
+		attack: Math.max(1, Math.round(def.attack * 1.35)),
+		defense: Math.max(0, Math.round(def.defense * 1.2)),
+		xp: Math.max(1, Math.round(def.xp * 2.4)),
+		gold: Math.max(1, Math.round(def.gold * 2.4)),
+		progress: Math.max(1, Math.round(def.progress * 1.75)),
+		itemDrop: def.itemDrop * 2.2,
+		materialDrop: Math.min(.9, def.materialDrop * 1.8),
+		trait: amplifyTrait(def.trait)
+	};
 }
-function averageRealmTimeToKillMs(realm, playerAttack, critChance, critMulti, swingMs) {
-	const times = realm.monsters.map((monster) => averageTimeToKillMs(playerAttack, critChance, critMulti, monster.hp, monster.defense, swingMs));
-	return times.reduce((a, b) => a + b, 0) / times.length;
+function spawnMonster(def, elite = false) {
+	const next = elite ? eliteScaled(def) : def;
+	return {
+		def: next,
+		hp: next.hp,
+		maxHp: next.hp,
+		elite,
+		boss: false
+	};
 }
-var byId = new Map([
+function timeToKillMs(attack, critChance, critMulti, def, swingMs) {
+	const avoid = Math.min(.75, (def.trait.phase ?? 0) + (def.trait.block ?? 0));
+	const net = Math.max(1, attack - def.defense * .4) * (1 - critChance + critChance * critMulti) * (1 - avoid) - (def.trait.regen ?? 0) * def.hp * (swingMs / 1e3);
+	if (net <= .25) return def.hp * swingMs * 4;
+	return Math.max(swingMs, Math.ceil(def.hp / net) * swingMs);
+}
+//#endregion
+//#region src/content/essences.ts
+var ESSENCE_DEFS = [
 	{
 		id: "dust-mite",
 		name: "Dust Mote",
@@ -440,9 +573,217 @@ var byId = new Map([
 		monster: "Blight Regent",
 		realmId: 4
 	}
-].map((entry) => [entry.id, entry]));
+];
+var byId = new Map(ESSENCE_DEFS.map((entry) => [entry.id, entry]));
 function essenceDef(id) {
 	return byId.get(id);
+}
+function essencesInRealm(realmId) {
+	return ESSENCE_DEFS.filter((entry) => entry.realmId === realmId);
+}
+//#endregion
+//#region src/game/rng.ts
+function mulberry32(seed) {
+	let a = seed >>> 0;
+	return () => {
+		a = a + 1831565813 >>> 0;
+		let t = a;
+		t = Math.imul(t ^ t >>> 15, t | 1);
+		t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+		return ((t ^ t >>> 14) >>> 0) / 4294967296;
+	};
+}
+function hashSeed(input) {
+	let h = 2166136261;
+	for (let i = 0; i < input.length; i++) {
+		h ^= input.charCodeAt(i);
+		h = Math.imul(h, 16777619);
+	}
+	return h >>> 0;
+}
+function pickWeighted(rng, entries) {
+	const usable = entries.filter((entry) => entry.weight > 0);
+	const pool = usable.length ? usable : entries;
+	const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
+	let roll = rng() * total;
+	for (const entry of pool) {
+		roll -= entry.weight;
+		if (roll <= 0) return entry;
+	}
+	return pool[pool.length - 1];
+}
+function randInt(rng, min, max) {
+	return min + Math.floor(rng() * (max - min + 1));
+}
+function chance(rng, p) {
+	return rng() < p;
+}
+//#endregion
+//#region src/game/contracts.ts
+var emptyHunt = () => ({
+	killsTowardElite: 0,
+	board: 1,
+	finalBossCleared: false,
+	contracts: []
+});
+function isContract(value) {
+	if (!value || typeof value !== "object") return false;
+	const row = value;
+	return typeof row.id === "string" && (row.kind === "monster" || row.kind === "elite" || row.kind === "realm") && typeof row.title === "string" && typeof row.detail === "string" && typeof row.target === "number" && typeof row.progress === "number" && typeof row.claimed === "boolean" && !!row.reward && typeof row.reward.gold === "number";
+}
+function huntFromUnknown(value) {
+	if (!value || typeof value !== "object") return void 0;
+	const raw = value;
+	const contracts = Array.isArray(raw.contracts) ? raw.contracts.filter(isContract) : [];
+	return {
+		killsTowardElite: Math.max(0, Math.floor(Number(raw.killsTowardElite ?? 0)) || 0),
+		board: Math.max(1, Math.floor(Number(raw.board ?? 1)) || 1),
+		finalBossCleared: Boolean(raw.finalBossCleared),
+		contracts
+	};
+}
+function pickIndex(rng, count) {
+	if (count <= 1) return 0;
+	return Math.floor(rng() * count);
+}
+function rollBoard(playerId, realmId, board) {
+	const realm = getRealm(realmId);
+	const rng = mulberry32(hashSeed(`${playerId}:hunts:${board}`));
+	const monsters = realm.monsters;
+	const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0];
+	const essencePool = essencesInRealm(realm.id);
+	const essenceFor = (fallback) => essencePool[pickIndex(rng, essencePool.length)]?.id ?? fallback;
+	const monsterTarget = 18 + realm.id * 8;
+	const eliteTarget = 2 + Math.floor(realm.id / 2);
+	const realmTarget = 24 + realm.id * 10;
+	const monsterEssence = monster?.id ?? essenceFor("dust-mite");
+	const eliteEssence = essenceFor(monsterEssence);
+	const realmEssence = essenceFor(monsterEssence);
+	return [
+		{
+			id: `${board}:monster`,
+			kind: "monster",
+			title: monster?.name ?? "Foes",
+			detail: `Slay ${monsterTarget} ${monster?.name ?? "foes"}`,
+			monsterId: monster?.id ?? null,
+			realmId: realm.id,
+			target: monsterTarget,
+			progress: 0,
+			claimed: false,
+			reward: {
+				gold: 80 * realm.id,
+				scrap: 4 * realm.id,
+				essenceId: monsterEssence,
+				essence: 2
+			}
+		},
+		{
+			id: `${board}:elite`,
+			kind: "elite",
+			title: "Elites",
+			detail: `Slay ${eliteTarget} elites`,
+			monsterId: null,
+			realmId: realm.id,
+			target: eliteTarget,
+			progress: 0,
+			claimed: false,
+			reward: {
+				gold: 120 * realm.id,
+				scrap: 6 * realm.id,
+				essenceId: eliteEssence,
+				essence: 3
+			}
+		},
+		{
+			id: `${board}:realm`,
+			kind: "realm",
+			title: realm.name,
+			detail: `Slay ${realmTarget} foes in ${realm.name}`,
+			monsterId: null,
+			realmId: realm.id,
+			target: realmTarget,
+			progress: 0,
+			claimed: false,
+			reward: {
+				gold: 90 * realm.id,
+				scrap: 5 * realm.id,
+				essenceId: realmEssence,
+				essence: 2
+			}
+		}
+	];
+}
+function withHunt(player, hunt) {
+	const current = hunt ?? huntFromUnknown(player.hunt) ?? emptyHunt();
+	if (current.contracts.length === 3) return {
+		...player,
+		hunt: current
+	};
+	const board = current.board || 1;
+	return {
+		...player,
+		hunt: {
+			...current,
+			board,
+			contracts: rollBoard(player.id, player.realmId, board)
+		}
+	};
+}
+function dueElite(player) {
+	return player.hunt.killsTowardElite >= 8;
+}
+function noteKill(player, note) {
+	const ready = withHunt(player);
+	const hunt = ready.hunt;
+	const killsTowardElite = note.boss ? hunt.killsTowardElite : note.elite ? 0 : hunt.killsTowardElite + 1;
+	const fulfilled = [];
+	const contracts = hunt.contracts.map((contract) => {
+		if (contract.claimed || contract.progress >= contract.target) return contract;
+		if (!(contract.kind === "monster" && contract.monsterId === note.monsterId || contract.kind === "elite" && note.elite || contract.kind === "realm" && contract.realmId === note.realmId)) return contract;
+		const progress = Math.min(contract.target, contract.progress + 1);
+		const next = {
+			...contract,
+			progress
+		};
+		if (progress >= contract.target) fulfilled.push(next);
+		return next;
+	});
+	return {
+		player: {
+			...ready,
+			hunt: {
+				...hunt,
+				killsTowardElite,
+				contracts
+			}
+		},
+		fulfilled
+	};
+}
+//#endregion
+//#region src/game/migrate.ts
+function migratePlayer(player) {
+	const progressRealmId = player.progressRealmId || player.realmId;
+	const seeded = withHunt({
+		...player,
+		progressRealmId
+	}, huntFromUnknown(player.hunt) ?? {
+		killsTowardElite: 0,
+		board: 1,
+		finalBossCleared: false,
+		contracts: []
+	});
+	if ((player.contentVersion ?? 1) >= 3) return seeded;
+	let highestRealmId = seeded.highestRealmId;
+	if (seeded.realmProgress >= 1e4 && seeded.progressRealmId === seeded.realmId) {
+		const nxt = nextRealm(seeded.realmId);
+		if (nxt) highestRealmId = Math.max(highestRealmId, nxt.id);
+	}
+	return {
+		...seeded,
+		highestRealmId,
+		contentVersion: 3
+	};
 }
 //#endregion
 //#region src/content/items.ts
@@ -893,43 +1234,6 @@ var SPECIALS = [
 	}
 ];
 //#endregion
-//#region src/game/rng.ts
-function mulberry32(seed) {
-	let a = seed >>> 0;
-	return () => {
-		a = a + 1831565813 >>> 0;
-		let t = a;
-		t = Math.imul(t ^ t >>> 15, t | 1);
-		t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-		return ((t ^ t >>> 14) >>> 0) / 4294967296;
-	};
-}
-function hashSeed(input) {
-	let h = 2166136261;
-	for (let i = 0; i < input.length; i++) {
-		h ^= input.charCodeAt(i);
-		h = Math.imul(h, 16777619);
-	}
-	return h >>> 0;
-}
-function pickWeighted(rng, entries) {
-	const usable = entries.filter((entry) => entry.weight > 0);
-	const pool = usable.length ? usable : entries;
-	const total = pool.reduce((sum, entry) => sum + entry.weight, 0);
-	let roll = rng() * total;
-	for (const entry of pool) {
-		roll -= entry.weight;
-		if (roll <= 0) return entry;
-	}
-	return pool[pool.length - 1];
-}
-function randInt(rng, min, max) {
-	return min + Math.floor(rng() * (max - min + 1));
-}
-function chance(rng, p) {
-	return rng() < p;
-}
-//#endregion
 //#region src/game/format.ts
 function isPercentStat(stat) {
 	return stat === "critChance" || stat === "block" || stat === "itemDrop" || stat === "materialDrop" || stat === "critMulti" || stat === "xpMod" || stat === "goldMod" || stat === "lifeSteal";
@@ -1267,23 +1571,18 @@ function applyKill(player, items, monster, stats, rng) {
 	const xpGain = Math.max(1, Math.floor(monster.def.xp * stats.xpMod));
 	const goldGain = Math.max(1, Math.floor(monster.def.gold * stats.goldMod));
 	const scrap = rollScrap(rng, monster.def.materialDrop * (stats.materialDrop / .18), player.realmId);
-	const essenceId = scrap > 0 && essenceDef(monster.def.id) ? monster.def.id : null;
+	const essenceKey = monster.boss ? getRealm(player.realmId).monsters.at(-1)?.id : monster.def.id;
+	const essenceId = scrap > 0 && essenceKey && essenceDef(essenceKey) ? essenceKey : null;
 	const currentEssences = player.essences ?? {};
 	const essences = essenceId ? {
 		...currentEssences,
 		[essenceId]: (currentEssences[essenceId] ?? 0) + 1
 	} : currentEssences;
-	const itemChance = monster.def.itemDrop * (stats.itemDrop / .08);
+	const itemChance = monster.boss ? 1 : monster.def.itemDrop * (stats.itemDrop / .08);
 	const item = items.filter((entry) => !entry.equippedSlot).length >= 30 ? null : rollItemDrop(rng, player.id, player.realmId, itemChance);
 	const leveled = grantXp(player.xp, player.level, player.skillPointsUnspent, xpGain);
 	const nextItems = item ? [...items, item] : items;
-	const onFrontier = player.realmId === player.highestRealmId;
-	const nextProgress = onFrontier ? Math.min(REALM_PROGRESS_CAP, player.realmProgress + monster.def.progress) : player.realmProgress;
-	let highestRealmId = player.highestRealmId;
-	if (onFrontier && nextProgress >= 1e4) {
-		const nxt = nextRealm(player.realmId);
-		if (nxt) highestRealmId = nxt.id;
-	}
+	const nextProgress = player.realmId === player.highestRealmId && player.progressRealmId === player.realmId && !monster.boss ? Math.min(REALM_PROGRESS_CAP, player.realmProgress + monster.def.progress) : player.realmProgress;
 	return {
 		player: {
 			...player,
@@ -1293,8 +1592,7 @@ function applyKill(player, items, monster, stats, rng) {
 			gold: player.gold + goldGain,
 			scrap: player.scrap + scrap,
 			essences,
-			realmProgress: nextProgress,
-			highestRealmId
+			realmProgress: nextProgress
 		},
 		items: nextItems,
 		reward: {
@@ -1979,11 +2277,12 @@ function deriveStats(player, items) {
 function settleOffline(player, items, nowMs) {
 	const elapsed = Math.max(0, Math.min(36e6, nowMs - player.lastSettledAt));
 	const seconds = Math.floor(elapsed / 1e3);
+	const base = migratePlayer(player);
 	if (seconds < 8) return {
 		player: {
-			...player,
+			...base,
 			lastSettledAt: nowMs,
-			contentVersion: 2
+			contentVersion: 3
 		},
 		items,
 		kills: 0,
@@ -1991,36 +2290,49 @@ function settleOffline(player, items, nowMs) {
 		gold: 0,
 		scrap: 0,
 		drops: 0,
-		seconds
+		seconds,
+		elites: 0,
+		fulfilledHunts: []
 	};
-	const stats = deriveStats(player, items);
-	const ttk = averageRealmTimeToKillMs(getRealm(player.realmId), stats.attack, stats.critChance, stats.critMulti, 800);
-	const kills = Math.max(0, Math.floor(elapsed / ttk * .92));
-	const rng = mulberry32(hashSeed(`${player.id}:${player.lastSettledAt}:${kills}`));
-	let nextPlayer = { ...player };
+	const stats = deriveStats(base, items);
+	const hunted = pickMonster(getRealm(base.realmId), base.queuedMonsterIndex);
+	const normalMs = timeToKillMs(stats.attack, stats.critChance, stats.critMulti, hunted, 800);
+	const eliteMs = timeToKillMs(stats.attack, stats.critChance, stats.critMulti, eliteScaled(hunted), 800);
+	const cycleMs = (normalMs * 8 + eliteMs) / 9;
+	const kills = Math.max(0, Math.floor(elapsed / cycleMs * .92));
+	const rng = mulberry32(hashSeed(`${base.id}:${base.lastSettledAt}:${kills}`));
+	let nextPlayer = base;
 	let nextItems = items;
 	let xp = 0;
 	let gold = 0;
 	let scrap = 0;
 	let drops = 0;
+	let elites = 0;
+	const fulfilledHunts = [];
 	for (let i = 0; i < kills; i++) {
+		const elite = dueElite(nextPlayer);
 		const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex);
-		const result = applyKill(nextPlayer, nextItems, {
-			def,
-			hp: 0,
-			maxHp: def.hp
-		}, deriveStats(nextPlayer, nextItems), rng);
-		nextPlayer = result.player;
+		const monster = spawnMonster(def, elite);
+		const result = applyKill(nextPlayer, nextItems, monster, deriveStats(nextPlayer, nextItems), rng);
+		const noted = noteKill(result.player, {
+			monsterId: def.id,
+			realmId: nextPlayer.realmId,
+			elite,
+			boss: false
+		});
+		nextPlayer = noted.player;
 		nextItems = result.items;
 		xp += result.reward.xp;
 		gold += result.reward.gold;
 		scrap += result.reward.scrap;
 		if (result.reward.item) drops += 1;
+		if (elite) elites += 1;
+		for (const contract of noted.fulfilled) fulfilledHunts.push(contract.title);
 	}
 	nextPlayer = {
 		...nextPlayer,
 		lastSettledAt: nowMs,
-		contentVersion: 2
+		contentVersion: 3
 	};
 	return {
 		player: nextPlayer,
@@ -2030,7 +2342,9 @@ function settleOffline(player, items, nowMs) {
 		gold,
 		scrap,
 		drops,
-		seconds
+		seconds,
+		elites,
+		fulfilledHunts
 	};
 }
 //#endregion
@@ -7489,7 +7803,9 @@ var playerSchema = object({
 	realmId: number().int().positive(),
 	highestRealmId: number().int().positive().optional(),
 	realmProgress: number().int().min(0).max(1e4),
+	progressRealmId: number().int().positive().optional(),
 	monsterIndex: number().int().nonnegative().optional(),
+	hunt: unknown().optional(),
 	queuedMonsterIndex: number().int().nonnegative().optional(),
 	skillPointsUnspent: number().int().nonnegative(),
 	allocatedNodeIds: array(number().int()),
@@ -7508,7 +7824,9 @@ function playerFromRow(row) {
 		realmId: row.realm_id,
 		highestRealmId: row.highest_realm_id ?? row.realm_id,
 		realmProgress: row.realm_progress,
+		progressRealmId: row.progress_realm_id ?? row.realm_id,
 		monsterIndex: row.monster_index ?? 0,
+		hunt: huntFromUnknown(row.hunt),
 		queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
 		skillPointsUnspent: row.skill_points_unspent,
 		allocatedNodeIds: row.allocated_node_ids ?? [],
@@ -7517,13 +7835,20 @@ function playerFromRow(row) {
 	});
 	const realm = getRealm(parsed.realmId);
 	const monsterIndex = huntIndex(realm, parsed.monsterIndex);
-	return {
+	return migratePlayer({
 		...parsed,
 		essences: parsed.essences ?? {},
 		highestRealmId: Math.max(parsed.highestRealmId ?? parsed.realmId, parsed.realmId),
+		progressRealmId: parsed.progressRealmId ?? parsed.realmId,
 		monsterIndex,
-		queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex)
-	};
+		queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
+		hunt: huntFromUnknown(parsed.hunt) ?? {
+			killsTowardElite: 0,
+			board: 1,
+			finalBossCleared: false,
+			contracts: []
+		}
+	});
 }
 function playerToRow(player) {
 	return {
@@ -7537,7 +7862,9 @@ function playerToRow(player) {
 		realm_id: player.realmId,
 		highest_realm_id: player.highestRealmId,
 		realm_progress: player.realmProgress,
+		progress_realm_id: player.progressRealmId,
 		monster_index: player.monsterIndex,
+		hunt: player.hunt,
 		queued_monster_index: player.queuedMonsterIndex,
 		skill_points_unspent: player.skillPointsUnspent,
 		allocated_node_ids: player.allocatedNodeIds,

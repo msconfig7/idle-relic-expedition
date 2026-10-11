@@ -1,4 +1,7 @@
-import { REALM_PROGRESS_CAP, getRealm } from '../../game'
+import { bossForRealm } from '../../content/bosses'
+import { REALM_PROGRESS_CAP, getRealm, nextRealm } from '../../game'
+import { wardenAwaits } from '../../game/boss'
+import { ELITE_EVERY } from '../../game/types'
 import { DESPAWN_MS } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import type { FloatingHit } from '../../game/types'
@@ -12,6 +15,8 @@ export function CombatScreen() {
   const queuedMonsterIndex = useGameStore((s) => s.queuedMonsterIndex)
   const queueMonster = useGameStore((s) => s.queueMonster)
   const openRealmPicker = useGameStore((s) => s.openRealmPicker)
+  const challengeBoss = useGameStore((s) => s.challengeBoss)
+  const openHunts = useGameStore((s) => s.openHunts)
   const realm = getRealm(player.realmId)
   const monsterPct = (combat.monster.hp / combat.monster.maxHp) * 100
   const playerPct = (combat.playerHp / combat.playerMaxHp) * 100
@@ -23,13 +28,22 @@ export function CombatScreen() {
   const portraitRef = useRef<HTMLImageElement>(null)
   const [panel, setPanel] = useState<'targets' | null>(null)
   const [slashId, setSlashId] = useState<number | null>(null)
-  const fighting = realm.monsters[monsterIndex]
   const realmPct =
     player.realmId < player.highestRealmId
       ? 100
       : Math.min(100, (player.realmProgress / REALM_PROGRESS_CAP) * 100)
-  const realmLabel = player.realmId < player.highestRealmId ? 'Cleared' : `${Math.floor(realmPct)}%`
   const despawning = combat.despawnMs > 0
+  const boss = bossForRealm(player.realmId)
+  const bossLive = combat.monster.boss && combat.bossPauseMs === 0 && combat.deathCooldownMs === 0
+  const showChallenge = Boolean(boss) && wardenAwaits(player) && !combat.monster.boss
+  const realmLabel =
+    player.realmId < player.highestRealmId ? 'Cleared' : showChallenge ? 'Warden' : `${Math.floor(realmPct)}%`
+  const next = nextRealm(player.realmId)
+  const readyHunts = player.hunt.contracts.filter((contract) => !contract.claimed && contract.progress >= contract.target).length
+  const eliteIn = combat.monster.elite ? 0 : Math.max(0, ELITE_EVERY - player.hunt.killsTowardElite)
+  const bossSeconds = Math.max(0, Math.ceil(combat.bossTimeLeftMs / 1000))
+  const bossLimit = boss?.timeLimitMs ?? combat.bossTimeLeftMs
+  const bossPct = bossLimit > 0 ? Math.max(0, Math.min(100, (combat.bossTimeLeftMs / bossLimit) * 100)) : 0
 
   useEffect(() => {
     setSlashId(null)
@@ -75,12 +89,40 @@ export function CombatScreen() {
         {combat.deathCooldownMs > 0 && (
           <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/55">
             <p className="rounded-lg border border-red-900/70 bg-red-950/90 px-4 py-2 text-center text-sm text-amber-100 shadow-lg">
-              Downed — no attacks · {Math.ceil(combat.deathCooldownMs / 1000)}s
+              {combat.bossFailed
+                ? `Downed — the warden remains · ${Math.ceil(combat.deathCooldownMs / 1000)}s`
+                : `Downed — no attacks · ${Math.ceil(combat.deathCooldownMs / 1000)}s`}
+            </p>
+          </div>
+        )}
+        {combat.bossPauseMs > 0 && (
+          <div className="pointer-events-none absolute inset-0 z-20 grid place-items-center bg-black/55">
+            <p className="rounded-lg border border-amber-800/80 bg-stone-950/90 px-4 py-2 text-center text-sm text-amber-100 shadow-lg">
+              Time — the warden withdraws
             </p>
           </div>
         )}
         <div className="relative">
-          <h2 className="text-left font-serif text-lg leading-tight text-amber-50">{combat.monster.def.name}</h2>
+          <div className="flex items-start justify-between gap-2">
+            <h2 className={`text-left font-serif text-lg leading-tight ${combat.monster.elite || combat.monster.boss ? 'text-amber-200' : 'text-amber-50'}`}>
+              {combat.monster.elite ? `Elite ${combat.monster.def.name}` : combat.monster.def.name}
+            </h2>
+            {combat.enraged && <span className="shrink-0 text-[10px] uppercase tracking-widest text-red-300">Enraged</span>}
+          </div>
+          <p className="text-[11px] leading-4 text-amber-100/75">
+            {combat.monster.def.trait.name} — {combat.monster.def.trait.blurb}
+          </p>
+          {combat.monster.boss && (
+            <div className="mt-1.5">
+              <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-amber-100/80">
+                <span>Warden</span>
+                <span className={bossSeconds <= 10 ? 'text-red-300' : ''}>{bossSeconds}s</span>
+              </div>
+              <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-black/45">
+                <div className={`h-full ${bossSeconds <= 10 ? 'bg-red-500' : 'bg-amber-300'}`} style={{ width: `${bossPct}%` }} />
+              </div>
+            </div>
+          )}
           <div className="relative mx-auto mt-6 grid h-36 place-items-center">
             <img
               key={combat.encounter}
@@ -88,6 +130,8 @@ export function CombatScreen() {
               src={combat.monster.def.image}
               alt=""
               className={`h-36 w-36 object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.7)] ${
+                combat.monster.elite ? 'rounded-full ring-2 ring-amber-300/80' : ''
+              } ${combat.monster.boss ? 'scale-110' : ''} ${
                 despawning ? 'monster-despawn' : 'monster-arrive'
               }`}
               style={despawning ? { animationDuration: `${DESPAWN_MS}ms` } : undefined}
@@ -113,12 +157,32 @@ export function CombatScreen() {
         <div className="flex items-center gap-2 px-3 py-2">
         <div className="min-w-0 flex-1 text-stone-950">
           <p className="truncate text-sm font-semibold">{realm.name}</p>
-          <p className="truncate text-[11px]">{fighting?.name ?? 'No target'}</p>
+          <p className="truncate text-[11px]">
+            {combat.monster.elite ? `Elite ${combat.monster.def.name}` : combat.monster.def.name}
+            {combat.monster.boss ? '' : combat.monster.elite ? '' : eliteIn === 0 ? ' · elite next' : ` · elite in ${eliteIn}`}
+          </p>
         </div>
         <button
           type="button"
+          aria-label="Hunt board"
+          className="relative grid shrink-0 place-items-center rounded-lg bg-black/25 px-2.5 py-1.5 text-stone-950"
+          onClick={openHunts}
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+            <path d="M7 3.5h8l4 4V20a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Z" />
+            <path d="M15 3.5V8h4.5M8.5 12h7M8.5 16h5" />
+          </svg>
+          {readyHunts > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full bg-amber-400 px-1 text-center text-[10px] leading-4 text-stone-950">
+              {readyHunts}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
           aria-label="Choose monster"
-          className="grid shrink-0 place-items-center rounded-lg bg-black/25 px-2.5 py-1.5 text-stone-950"
+          disabled={bossLive}
+          className="grid shrink-0 place-items-center rounded-lg bg-black/25 px-2.5 py-1.5 text-stone-950 disabled:opacity-40"
           onClick={() => setPanel('targets')}
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -128,7 +192,8 @@ export function CombatScreen() {
         <button
           type="button"
           aria-label="Realm"
-          className="grid shrink-0 cursor-pointer place-items-center rounded-lg bg-black/25 px-2.5 py-1.5 text-stone-950"
+          className="grid shrink-0 cursor-pointer place-items-center rounded-lg bg-black/25 px-2.5 py-1.5 text-stone-950 disabled:opacity-40"
+          disabled={bossLive}
           onClick={openRealmPicker}
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -150,6 +215,19 @@ export function CombatScreen() {
           <div className="h-full bg-black/60" style={{ width: `${realmPct}%` }} />
         </div>
       </div>
+      {showChallenge && boss && (
+        <button
+          type="button"
+          onClick={challengeBoss}
+          className="rounded-xl border border-amber-500/80 bg-gradient-to-r from-amber-800 to-amber-600 px-3 py-2.5 text-left text-stone-950"
+        >
+          <p className="font-serif text-base leading-tight">Challenge {boss.name}</p>
+          <p className="text-[11px] leading-4">
+            {Math.round(boss.timeLimitMs / 1000)}s on the field.
+            {next ? ` Victory opens ${next.name}.` : ' This is the end of the map.'}
+          </p>
+        </button>
+      )}
       {panel === 'targets' && (
         <Modal title="Targets" onClose={() => setPanel(null)}>
           <p className="text-[11px] text-stone-500">
@@ -181,8 +259,8 @@ export function CombatScreen() {
                       {monster.name}
                       {active ? ' · fighting' : queued ? ' · next' : ''}
                     </p>
-                    <p className="mt-0.5 text-[11px] tabular-nums text-stone-400">
-                      HP {monster.hp} · ATK {monster.attack} · XP {monster.xp}
+                    <p className="mt-0.5 text-[11px] text-stone-400">
+                      {monster.trait.name} — {monster.trait.blurb}
                     </p>
                   </div>
                 </button>

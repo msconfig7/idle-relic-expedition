@@ -22,6 +22,11 @@ export const realms: RealmDef[] = [
         progress: 55,
         itemDrop: 0.012,
         materialDrop: 0.14,
+        trait: {
+          name: 'Mote Drift',
+          blurb: 'Loose dust knits back together while it fights.',
+          regen: 0.012,
+        },
       },
       {
         id: 'road-gnoll',
@@ -35,6 +40,13 @@ export const realms: RealmDef[] = [
         progress: 62,
         itemDrop: 0.014,
         materialDrop: 0.13,
+        trait: {
+          name: 'Pack Frenzy',
+          blurb: 'Below half health it snarls, swinging faster and harder.',
+          enrageBelow: 0.5,
+          enrageAttack: 1.3,
+          enrageSwing: 0.72,
+        },
       },
       {
         id: 'lost-shade',
@@ -48,6 +60,11 @@ export const realms: RealmDef[] = [
         progress: 68,
         itemDrop: 0.015,
         materialDrop: 0.12,
+        trait: {
+          name: 'Phase Veil',
+          blurb: 'The shade lets blades pass through.',
+          phase: 0.18,
+        },
       },
       {
         id: 'waystone-brute',
@@ -61,6 +78,12 @@ export const realms: RealmDef[] = [
         progress: 80,
         itemDrop: 0.018,
         materialDrop: 0.16,
+        trait: {
+          name: 'Stonehide',
+          blurb: 'Waystone skin turns hits and bites back.',
+          thorns: 0.16,
+          block: 0.12,
+        },
       },
     ],
   },
@@ -83,6 +106,11 @@ export const realms: RealmDef[] = [
         progress: 48,
         itemDrop: 0.016,
         materialDrop: 0.15,
+        trait: {
+          name: 'Skitter',
+          blurb: 'Too many legs. It reaches you early.',
+          swingScale: 0.75,
+        },
       },
       {
         id: 'drowned-acolyte',
@@ -96,6 +124,11 @@ export const realms: RealmDef[] = [
         progress: 54,
         itemDrop: 0.018,
         materialDrop: 0.14,
+        trait: {
+          name: 'Salt Rite',
+          blurb: 'Drowned prayers dull your recovery.',
+          suppressRegen: 0.8,
+        },
       },
       {
         id: 'crypt-guard',
@@ -109,6 +142,11 @@ export const realms: RealmDef[] = [
         progress: 60,
         itemDrop: 0.02,
         materialDrop: 0.17,
+        trait: {
+          name: 'Shield Wall',
+          blurb: 'A crypt shield catches the first angle of a blow.',
+          block: 0.22,
+        },
       },
       {
         id: 'vault-wraith',
@@ -122,6 +160,13 @@ export const realms: RealmDef[] = [
         progress: 68,
         itemDrop: 0.022,
         materialDrop: 0.13,
+        trait: {
+          name: 'Grave Wail',
+          blurb: 'It slips aside, then wails once it is wounded.',
+          phase: 0.12,
+          enrageBelow: 0.4,
+          enrageAttack: 1.5,
+        },
       },
     ],
   },
@@ -144,6 +189,11 @@ export const realms: RealmDef[] = [
         progress: 42,
         itemDrop: 0.02,
         materialDrop: 0.16,
+        trait: {
+          name: 'Cinderbite',
+          blurb: 'Each bite leaves a coal burning in the wound.',
+          burn: 0.22,
+        },
       },
       {
         id: 'magma-scarab',
@@ -157,6 +207,12 @@ export const realms: RealmDef[] = [
         progress: 48,
         itemDrop: 0.022,
         materialDrop: 0.18,
+        trait: {
+          name: 'Molten Carapace',
+          blurb: 'The shell is hot, hard, and slow to crack.',
+          thorns: 0.2,
+          regen: 0.006,
+        },
       },
       {
         id: 'peak-raider',
@@ -170,6 +226,11 @@ export const realms: RealmDef[] = [
         progress: 54,
         itemDrop: 0.024,
         materialDrop: 0.15,
+        trait: {
+          name: 'Ambush',
+          blurb: 'The raider’s first strike is the one that matters.',
+          ambush: 2.1,
+        },
       },
       {
         id: 'ember-tyrant',
@@ -183,6 +244,13 @@ export const realms: RealmDef[] = [
         progress: 64,
         itemDrop: 0.028,
         materialDrop: 0.2,
+        trait: {
+          name: "Tyrant's Pyre",
+          blurb: 'Fire rolls off the tyrant, and pain makes it crueler.',
+          auraBurn: 0.12,
+          enrageBelow: 0.35,
+          enrageAttack: 1.4,
+        },
       },
     ],
   },
@@ -205,6 +273,11 @@ export const realms: RealmDef[] = [
         progress: 36,
         itemDrop: 0.026,
         materialDrop: 0.17,
+        trait: {
+          name: 'Blood Draw',
+          blurb: 'The leech drinks a share of every hit it lands.',
+          leech: 0.4,
+        },
       },
       {
         id: 'spore-beetle',
@@ -218,6 +291,11 @@ export const realms: RealmDef[] = [
         progress: 42,
         itemDrop: 0.028,
         materialDrop: 0.19,
+        trait: {
+          name: 'Spore Cloud',
+          blurb: 'Spores cling and keep feeding after the hit.',
+          poison: 0.2,
+        },
       },
       {
         id: 'mire-stalker',
@@ -231,6 +309,12 @@ export const realms: RealmDef[] = [
         progress: 48,
         itemDrop: 0.03,
         materialDrop: 0.16,
+        trait: {
+          name: 'Venom Lunge',
+          blurb: 'It strikes from the mire, then leaves venom behind.',
+          ambush: 1.85,
+          poison: 0.16,
+        },
       },
       {
         id: 'blight-regent',
@@ -244,6 +328,12 @@ export const realms: RealmDef[] = [
         progress: 56,
         itemDrop: 0.034,
         materialDrop: 0.22,
+        trait: {
+          name: 'Creeping Blight',
+          blurb: 'Rot closes its wounds and seeps into yours.',
+          regen: 0.01,
+          poison: 0.18,
+        },
       },
     ],
   },
