@@ -18,6 +18,10 @@ export const ESSENCE_DEFS: EssenceDef[] = [
   { id: 'magma-scarab', name: 'Scarab Carapace', monster: 'Magma Scarab', realmId: 3 },
   { id: 'peak-raider', name: 'Raider Iron', monster: 'Peak Raider', realmId: 3 },
   { id: 'ember-tyrant', name: 'Tyrant Ember', monster: 'Ember Tyrant', realmId: 3 },
+  { id: 'fen-leech', name: 'Leech Ichor', monster: 'Fen Leech', realmId: 4 },
+  { id: 'spore-beetle', name: 'Beetle Spore', monster: 'Spore Beetle', realmId: 4 },
+  { id: 'mire-stalker', name: 'Stalker Venom', monster: 'Mire Stalker', realmId: 4 },
+  { id: 'blight-regent', name: 'Regent Heart', monster: 'Blight Regent', realmId: 4 },
 ]
 
 const byId = new Map(ESSENCE_DEFS.map((entry) => [entry.id, entry]))
