@@ -93,10 +93,7 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const id = window.setInterval(() => setPace(capturePace(Date.now())), REFRESH_MS)
-    return () => {
-      window.clearInterval(id)
-      resetPaceSamples()
-    }
+    return () => window.clearInterval(id)
   }, [])
 
   useEffect(() => {
