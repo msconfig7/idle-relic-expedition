@@ -19,6 +19,9 @@ export function Modal({
       onMouseDown={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className="relative flex max-h-[85svh] w-full max-w-[24rem] flex-col rounded-2xl border border-stone-700 bg-stone-900 p-4 pt-11"
         onMouseDown={(event) => event.stopPropagation()}
       >
