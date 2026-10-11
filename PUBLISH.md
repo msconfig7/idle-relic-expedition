@@ -8,8 +8,8 @@ Official docs: [CLI](https://docs.shipstatic.com/cli) · [API](https://docs.ship
 
 | | |
 | --- | --- |
-| URL | https://refined-trail-7x9j57d.shipstatic.com |
-| Deployment | `refined-trail-7x9j57d.shipstatic.com` |
+| URL | https://ethereal-dust-6w6nyg7.shipstatic.com |
+| Deployment | `ethereal-dust-6w6nyg7.shipstatic.com` |
 | Label | `idle-relic` |
 | Account | simsekm7@gmail.com (free plan) |
 
