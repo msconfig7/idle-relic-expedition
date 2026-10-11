@@ -16,14 +16,6 @@ const LEVEL_CAP = 200
 const REFRESH_MS = 5_000
 /** One minute of 5-second pace readings. */
 const PACE_SAMPLES = 12
-let paceReadings: number[] = []
-let lastPaceSampleAt = 0
-
-function resetPaceSamples(): void {
-  paceReadings = []
-  lastPaceSampleAt = 0
-}
-
 type PaceView = {
   level: number
   into: number
@@ -37,6 +29,11 @@ type PaceView = {
   monsterName: string | null
   perKill: number
 }
+
+let paceReadings: number[] = []
+let lastPaceSampleAt = 0
+let published: PaceView | null = null
+let publishedAt = 0
 
 /** Snapshot the averaged pace. The modal keeps it until the next 5s refresh. */
 function capturePace(now: number): PaceView {
@@ -85,15 +82,28 @@ function capturePace(now: number): PaceView {
   }
 }
 
+/** One averaged snapshot. Remounts during the 5s window reuse it. */
+function readPublished(now = Date.now()): PaceView {
+  if (published && now - publishedAt < REFRESH_MS) return published
+  published = capturePace(now)
+  publishedAt = now
+  return published
+}
+
 export function XpProgressModal({ onClose }: { onClose: () => void }) {
-  const [pace, setPace] = useState(() => {
-    resetPaceSamples()
-    return capturePace(Date.now())
-  })
+  const [pace, setPace] = useState(readPublished)
 
   useEffect(() => {
-    const id = window.setInterval(() => setPace(capturePace(Date.now())), REFRESH_MS)
-    return () => window.clearInterval(id)
+    const delay = Math.max(0, REFRESH_MS - (Date.now() - publishedAt))
+    let interval = 0
+    const timeout = window.setTimeout(() => {
+      setPace(readPublished())
+      interval = window.setInterval(() => setPace(readPublished()), REFRESH_MS)
+    }, delay)
+    return () => {
+      window.clearTimeout(timeout)
+      window.clearInterval(interval)
+    }
   }, [])
 
   useEffect(() => {
