@@ -266,6 +266,12 @@ export type HuntState = {
   board: number
   finalBossCleared: boolean
   contracts: HuntContract[]
+  /** Epoch ms when a sealed board may be replaced. Null while hunts are open. */
+  nextBoardAt: number | null
+  /** Sealed board whose 3 diamonds are waiting for a separate claim. */
+  diamondRewardBoard: number | null
+  /** Board number whose diamond seal is still waiting on the server. */
+  unconfirmedSealBoard: number | null
 }
 
 export type CombatLogEntry = {

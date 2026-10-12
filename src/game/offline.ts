@@ -49,17 +49,22 @@ export function settleOffline(
   let elites = 0
   const fulfilledHunts: string[] = []
 
+  const killSpan = kills > 0 ? elapsed / kills : 0
   for (let i = 0; i < kills; i++) {
     const elite = dueElite(nextPlayer)
     const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex)
     const monster = spawnMonster(def, elite)
     const result = applyKill(nextPlayer, nextItems, monster, deriveStats(nextPlayer, nextItems), rng)
-    const noted = noteKill(result.player, {
-      monsterId: def.id,
-      realmId: nextPlayer.realmId,
-      elite,
-      boss: false,
-    })
+    const noted = noteKill(
+      result.player,
+      {
+        monsterId: def.id,
+        realmId: nextPlayer.realmId,
+        elite,
+        boss: false,
+      },
+      base.lastSettledAt + Math.floor((i + 1) * killSpan),
+    )
     nextPlayer = noted.player
     nextItems = result.items
     xp += result.reward.xp

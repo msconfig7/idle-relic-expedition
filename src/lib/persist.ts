@@ -30,6 +30,9 @@ function readLocal(): SaveBlob | null {
         board: 1,
         finalBossCleared: false,
         contracts: [],
+        nextBoardAt: null,
+        diamondRewardBoard: null,
+        unconfirmedSealBoard: null,
       },
     })
     const items = parsed.items

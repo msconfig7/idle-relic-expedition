@@ -131,6 +131,9 @@ export function playerFromRow(row: PlayerRow): PlayerState {
       board: 1,
       finalBossCleared: false,
       contracts: [],
+      nextBoardAt: null,
+      diamondRewardBoard: null,
+      unconfirmedSealBoard: null,
     },
   })
 }

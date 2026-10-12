@@ -2,7 +2,7 @@ import { essenceName, essencesInRealm } from '../content/essences'
 import { getRealm } from './combat'
 import { ELITE_EVERY } from './types'
 import { hashSeed, mulberry32 } from './rng'
-import type { HuntContract, HuntState, PlayerState } from './types'
+import type { HuntContract, HuntKind, HuntState, PlayerState } from './types'
 
 export type KillNote = {
   monsterId: string
@@ -11,12 +11,20 @@ export type KillNote = {
   boss: boolean
 }
 
-const emptyHunt = (): HuntState => ({
-  killsTowardElite: 0,
-  board: 1,
-  finalBossCleared: false,
-  contracts: [],
-})
+export const HUNT_BOARD_COOLDOWN_MS = 2 * 60 * 60 * 1000
+export const HUNT_SEAL_DIAMONDS = 3
+
+function optionalTime(value: unknown): number | null {
+  const time = Number(value)
+  if (!Number.isFinite(time) || time <= 0) return null
+  return Math.floor(time)
+}
+
+function optionalBoard(value: unknown): number | null {
+  const board = Math.floor(Number(value))
+  if (!Number.isFinite(board) || board <= 0) return null
+  return board
+}
 
 function isContract(value: unknown): value is HuntContract {
   if (!value || typeof value !== 'object') return false
@@ -43,12 +51,64 @@ export function huntFromUnknown(value: unknown): HuntState | undefined {
     board: Math.max(1, Math.floor(Number(raw.board ?? 1)) || 1),
     finalBossCleared: Boolean(raw.finalBossCleared),
     contracts,
+    nextBoardAt: optionalTime(raw.nextBoardAt),
+    diamondRewardBoard: optionalBoard(raw.diamondRewardBoard),
+    unconfirmedSealBoard: optionalBoard(raw.unconfirmedSealBoard),
   }
 }
 
 function pickIndex(rng: () => number, count: number): number {
   if (count <= 1) return 0
   return Math.floor(rng() * count)
+}
+
+function quarryNumbers(realmId: number, kind: HuntKind): { target: number; gold: number; scrap: number; essence: number } {
+  if (kind === 'elite') return { target: 6 + realmId * 2, gold: 400 * realmId, scrap: 18 * realmId, essence: 9 }
+  if (kind === 'realm') return { target: 60 + realmId * 24, gold: 300 * realmId, scrap: 15 * realmId, essence: 6 }
+  return { target: 48 + realmId * 20, gold: 260 * realmId, scrap: 12 * realmId, essence: 6 }
+}
+
+function quarryDetail(contract: Pick<HuntContract, 'kind' | 'title'>, target: number): string {
+  if (contract.kind === 'elite') return `Slay ${target} elites`
+  if (contract.kind === 'realm') return `Slay ${target} foes in ${contract.title}`
+  return `Slay ${target} ${contract.title}`
+}
+
+function scaleOpenContract(contract: HuntContract): HuntContract {
+  if (contract.claimed) return contract
+  const numbers = quarryNumbers(contract.realmId, contract.kind)
+  const detail = quarryDetail(contract, numbers.target)
+  if (
+    contract.target === numbers.target &&
+    contract.detail === detail &&
+    contract.reward.gold === numbers.gold &&
+    contract.reward.scrap === numbers.scrap &&
+    contract.reward.essence === numbers.essence
+  ) {
+    return contract
+  }
+  return {
+    ...contract,
+    target: numbers.target,
+    detail,
+    progress: Math.min(contract.progress, numbers.target),
+    reward: {
+      ...contract.reward,
+      gold: numbers.gold,
+      scrap: numbers.scrap,
+      essence: numbers.essence,
+    },
+  }
+}
+
+function scaleOpenContracts(hunt: HuntState): HuntState {
+  let changed = false
+  const contracts = hunt.contracts.map((contract) => {
+    const next = scaleOpenContract(contract)
+    if (next !== contract) changed = true
+    return next
+  })
+  return changed ? { ...hunt, contracts } : hunt
 }
 
 export function rollBoard(playerId: string, realmId: number, board: number): HuntContract[] {
@@ -58,9 +118,9 @@ export function rollBoard(playerId: string, realmId: number, board: number): Hun
   const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0]
   const essencePool = essencesInRealm(realm.id)
   const essenceFor = (fallback: string) => essencePool[pickIndex(rng, essencePool.length)]?.id ?? fallback
-  const monsterTarget = 18 + realm.id * 8
-  const eliteTarget = 2 + Math.floor(realm.id / 2)
-  const realmTarget = 24 + realm.id * 10
+  const monsterNumbers = quarryNumbers(realm.id, 'monster')
+  const eliteNumbers = quarryNumbers(realm.id, 'elite')
+  const realmNumbers = quarryNumbers(realm.id, 'realm')
   const monsterEssence = monster?.id ?? essenceFor('dust-mite')
   const eliteEssence = essenceFor(monsterEssence)
   const realmEssence = essenceFor(monsterEssence)
@@ -69,57 +129,104 @@ export function rollBoard(playerId: string, realmId: number, board: number): Hun
     id: `${board}:monster`,
     kind: 'monster',
     title: monster?.name ?? 'Foes',
-    detail: `Slay ${monsterTarget} ${monster?.name ?? 'foes'}`,
+    detail: quarryDetail({ kind: 'monster', title: monster?.name ?? 'Foes' }, monsterNumbers.target),
     monsterId: monster?.id ?? null,
     realmId: realm.id,
-    target: monsterTarget,
+    target: monsterNumbers.target,
     progress: 0,
     claimed: false,
-    reward: { gold: 80 * realm.id, scrap: 4 * realm.id, essenceId: monsterEssence, essence: 2 },
+    reward: {
+      gold: monsterNumbers.gold,
+      scrap: monsterNumbers.scrap,
+      essenceId: monsterEssence,
+      essence: monsterNumbers.essence,
+    },
   }
   const elites: HuntContract = {
     id: `${board}:elite`,
     kind: 'elite',
     title: 'Elites',
-    detail: `Slay ${eliteTarget} elites`,
+    detail: quarryDetail({ kind: 'elite', title: 'Elites' }, eliteNumbers.target),
     monsterId: null,
     realmId: realm.id,
-    target: eliteTarget,
+    target: eliteNumbers.target,
     progress: 0,
     claimed: false,
-    reward: { gold: 120 * realm.id, scrap: 6 * realm.id, essenceId: eliteEssence, essence: 3 },
+    reward: {
+      gold: eliteNumbers.gold,
+      scrap: eliteNumbers.scrap,
+      essenceId: eliteEssence,
+      essence: eliteNumbers.essence,
+    },
   }
   const sweep: HuntContract = {
     id: `${board}:realm`,
     kind: 'realm',
     title: realm.name,
-    detail: `Slay ${realmTarget} foes in ${realm.name}`,
+    detail: quarryDetail({ kind: 'realm', title: realm.name }, realmNumbers.target),
     monsterId: null,
     realmId: realm.id,
-    target: realmTarget,
+    target: realmNumbers.target,
     progress: 0,
     claimed: false,
-    reward: { gold: 90 * realm.id, scrap: 5 * realm.id, essenceId: realmEssence, essence: 2 },
+    reward: {
+      gold: realmNumbers.gold,
+      scrap: realmNumbers.scrap,
+      essenceId: realmEssence,
+      essence: realmNumbers.essence,
+    },
   }
   return [slay, elites, sweep]
 }
 
-export function withHunt(player: PlayerState, hunt?: HuntState): PlayerState {
-  const current = hunt ?? huntFromUnknown(player.hunt) ?? emptyHunt()
-  if (current.contracts.length === 3) return { ...player, hunt: current }
-  const board = current.board || 1
-  return {
-    ...player,
-    hunt: { ...current, board, contracts: rollBoard(player.id, player.realmId, board) },
+function boardCooling(hunt: HuntState, now: number): boolean {
+  return hunt.nextBoardAt != null && now < hunt.nextBoardAt
+}
+
+function resolveBoard(player: PlayerState, hunt: HuntState, now: number): HuntState {
+  const scaled = scaleOpenContracts(hunt)
+  const sealed = scaled.contracts.length === 3 && scaled.contracts.every((contract) => contract.claimed)
+  const diamondsWaiting = scaled.diamondRewardBoard != null || scaled.unconfirmedSealBoard != null
+  if (sealed && (boardCooling(scaled, now) || diamondsWaiting)) return scaled
+  if (sealed && scaled.nextBoardAt != null) {
+    const board = scaled.board + 1
+    return {
+      ...scaled,
+      board,
+      nextBoardAt: null,
+      diamondRewardBoard: null,
+      unconfirmedSealBoard: null,
+      contracts: rollBoard(player.id, player.realmId, board),
+    }
   }
+  if (scaled.contracts.length === 3) return scaled
+  if (boardCooling(scaled, now)) return scaled
+  const board = scaled.board || 1
+  return {
+    ...scaled,
+    board,
+    nextBoardAt: null,
+    contracts: rollBoard(player.id, player.realmId, board),
+  }
+}
+
+export function withHunt(player: PlayerState, hunt?: HuntState, now = Date.now()): PlayerState {
+  const current = hunt ?? player.hunt
+  const next = resolveBoard(player, current, now)
+  if (next === current) return hunt === undefined ? player : { ...player, hunt: current }
+  return { ...player, hunt: next }
 }
 
 export function dueElite(player: PlayerState): boolean {
   return player.hunt.killsTowardElite >= ELITE_EVERY
 }
 
-export function noteKill(player: PlayerState, note: KillNote): { player: PlayerState; fulfilled: HuntContract[] } {
-  const ready = withHunt(player)
+export function noteKill(
+  player: PlayerState,
+  note: KillNote,
+  now = Date.now(),
+): { player: PlayerState; fulfilled: HuntContract[] } {
+  const ready = withHunt(player, undefined, now)
   const hunt = ready.hunt
   const killsTowardElite = note.boss ? hunt.killsTowardElite : note.elite ? 0 : hunt.killsTowardElite + 1
   const fulfilled: HuntContract[] = []
@@ -148,33 +255,59 @@ export function rewardLine(contract: HuntContract): string {
 export function claimHunt(
   player: PlayerState,
   contractId: string,
-): { ok: true; player: PlayerState; refreshed: boolean; rewardText: string } | { ok: false; reason: string } {
-  const ready = withHunt(player)
+  now = Date.now(),
+): { ok: true; player: PlayerState; boardSealed: boolean; rewardText: string } | { ok: false; reason: string } {
+  const ready = withHunt(player, undefined, now)
   const contract = ready.hunt.contracts.find((entry) => entry.id === contractId)
   if (!contract) return { ok: false, reason: 'That hunt is gone.' }
   if (contract.claimed) return { ok: false, reason: 'Already sealed.' }
   if (contract.progress < contract.target) return { ok: false, reason: 'The hunt is still open.' }
-  let contracts = ready.hunt.contracts.map((entry) =>
+  if (ready.hunt.nextBoardAt != null && now < ready.hunt.nextBoardAt) {
+    return { ok: false, reason: 'The board is sealed. New hunts are not posted yet.' }
+  }
+  const contracts = ready.hunt.contracts.map((entry) =>
     entry.id === contractId ? { ...entry, claimed: true } : entry,
   )
-  let board = ready.hunt.board
-  const refreshed = contracts.every((entry) => entry.claimed)
-  if (refreshed) {
-    board += 1
-    contracts = rollBoard(ready.id, ready.realmId, board)
-  }
+  const boardSealed = contracts.every((entry) => entry.claimed)
   const essences = { ...ready.essences }
   essences[contract.reward.essenceId] = (essences[contract.reward.essenceId] ?? 0) + contract.reward.essence
   return {
     ok: true,
-    refreshed,
+    boardSealed,
     rewardText: rewardLine(contract),
     player: {
       ...ready,
       gold: ready.gold + contract.reward.gold,
       scrap: ready.scrap + contract.reward.scrap,
       essences,
-      hunt: { ...ready.hunt, board, contracts },
+      hunt: {
+        ...ready.hunt,
+        contracts,
+        nextBoardAt: boardSealed ? now + HUNT_BOARD_COOLDOWN_MS : ready.hunt.nextBoardAt,
+        diamondRewardBoard: boardSealed ? ready.hunt.board : ready.hunt.diamondRewardBoard,
+      },
+    },
+  }
+}
+
+export function claimSealDiamonds(
+  player: PlayerState,
+): { ok: true; player: PlayerState; rewardText: string } | { ok: false; reason: string } {
+  const hunt = player.hunt
+  const sealed = hunt.contracts.length === 3 && hunt.contracts.every((contract) => contract.claimed)
+  if (!sealed) return { ok: false, reason: 'Seal every hunt first.' }
+  if (hunt.diamondRewardBoard == null) return { ok: false, reason: 'The diamonds are already claimed.' }
+  return {
+    ok: true,
+    rewardText: `+${HUNT_SEAL_DIAMONDS} diamonds`,
+    player: {
+      ...player,
+      diamonds: player.diamonds + HUNT_SEAL_DIAMONDS,
+      hunt: {
+        ...hunt,
+        diamondRewardBoard: null,
+        unconfirmedSealBoard: hunt.board,
+      },
     },
   }
 }
