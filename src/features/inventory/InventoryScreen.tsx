@@ -421,19 +421,20 @@ export function InventoryScreen() {
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              className="rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
               onClick={() => setForgeItemId(selected.id)}
             >
+              <AnvilIcon />
               Forge
             </button>
             <button
               type="button"
-              aria-label="Salvage"
               disabled={selected.locked}
-              className="grid h-9 w-9 place-items-center rounded-lg border border-red-900/80 text-red-300 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-900/80 px-3 py-1.5 text-sm text-red-300 disabled:opacity-40"
               onClick={() => setSalvageAsk(true)}
             >
               <SalvageIcon />
+              Salvage
             </button>
           </div>
         </Modal>
@@ -602,21 +603,36 @@ export function InventoryScreen() {
   )
 }
 
+function AnvilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="currentColor" aria-hidden>
+      <path d="M1 12.7 8 10.1v4.3L1 13.6Z" />
+      <path d="M7.2 9h9.4v6H7.2Z" />
+      <path d="M15.8 10.4H22v3.8h-6.2Z" />
+      <path d="M9 14.6h6.4l-1 3.1h-4.4Z" />
+      <path d="M5.2 17.4h13.6v3.1H5.2Z" />
+    </svg>
+  )
+}
+
 function SalvageIcon() {
   return (
     <svg
       viewBox="0 0 24 24"
-      className="h-5 w-5 shrink-0"
+      className="h-4 w-4 shrink-0"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M14.5 4.5 19 9l-8.5 8.5H6v-4.5L14.5 4.5Z" />
-      <path d="m12 7 5 5" />
-      <path d="M4 20h16" />
+      <path d="M7 19H4.815a1.83 1.83 0 0 1-1.57-.881 1.785 1.785 0 0 1-.004-1.784L7.196 9.5" />
+      <path d="M11 19h8.203a1.83 1.83 0 0 0 1.556-.89 1.784 1.784 0 0 0 0-1.775l-1.226-2.12" />
+      <path d="m14 16-3 3 3 3" />
+      <path d="M8.293 13.596 7.196 9.5 3.1 10.598" />
+      <path d="m9.344 5.811 1.093-1.892A1.83 1.83 0 0 1 11.985 3a1.784 1.784 0 0 1 1.546.888l3.943 6.843" />
+      <path d="m13.378 9.633 4.096 1.098 1.097-4.096" />
     </svg>
   )
 }
