@@ -13,7 +13,7 @@ import {
   strikeDamage,
 } from '../game'
 import { grantBossVictory, wardenAwaits, type RealmDoor } from '../game/boss'
-import { claimHunt, claimable, dueElite, noteKill, withHunt } from '../game/contracts'
+import { claimHunt, claimSealDiamonds, claimable, dueElite, noteKill, withHunt } from '../game/contracts'
 import { spawnBoss } from '../game/combat'
 import {
   DOT_MS,
@@ -101,6 +101,7 @@ type GameStore = {
   setScreen: (screen: ScreenId) => void
   selectItem: (id: string | null) => void
   queueMonster: (index: number) => void
+  seekPrey: (monsterId: string, realmId: number) => { ok: true } | { ok: false; reason: string }
   tick: (dt?: number) => void
   equip: (itemId: string, slot: EquipSlot) => void
   unequip: (itemId: string) => void
@@ -123,6 +124,7 @@ type GameStore = {
   claimContract: (
     id: string,
   ) => { ok: true; boardSealed: boolean; rewardText: string } | { ok: false; reason: string }
+  claimBoardDiamonds: () => { ok: true; rewardText: string } | { ok: false; reason: string }
   challengeBoss: () => void
   resumeBoss: (awayMs: number) => boolean
   acknowledgeDoor: () => void
@@ -293,6 +295,66 @@ export const useGameStore = create<GameStore>((set, get) => ({
       player: { ...player, queuedMonsterIndex: nextIndex },
       dirty: true,
     })
+  },
+
+  seekPrey: (monsterId, realmId) => {
+    const { player, items, combat, screen, unseenItemIds } = get()
+    if (!player) return { ok: false, reason: 'Not ready.' }
+    if (combat?.monster.boss && combat.monster.hp > 0 && combat.bossPauseMs === 0 && combat.deathCooldownMs === 0) {
+      return { ok: false, reason: 'The warden is still on the field.' }
+    }
+    if (realmId > player.highestRealmId) return { ok: false, reason: 'That realm is still shut.' }
+    const realm = getRealm(realmId)
+    const index = realm.monsters.findIndex((monster) => monster.id === monsterId)
+    if (index < 0) return { ok: false, reason: 'That quarry is gone.' }
+
+    const leaveBag = screen === 'inventory' && unseenItemIds.length > 0
+    if (leaveBag) writeUnseen(player.id, [])
+    const sameQuarry =
+      player.realmId === realmId &&
+      combat != null &&
+      !combat.monster.boss &&
+      combat.monster.def.id === monsterId
+    if (sameQuarry) {
+      set({
+        screen: 'combat',
+        huntsOpen: false,
+        queuedMonsterIndex: index,
+        player: { ...player, queuedMonsterIndex: index },
+        unseenItemIds: leaveBag ? [] : unseenItemIds,
+      })
+      return { ok: true }
+    }
+
+    let realmProgress = player.realmProgress
+    let progressRealmId = player.progressRealmId
+    if (realmId !== player.realmId && realmId === player.highestRealmId && progressRealmId !== realmId) {
+      realmProgress = 0
+      progressRealmId = realmId
+    }
+    const nextPlayer = {
+      ...player,
+      realmId,
+      realmProgress,
+      progressRealmId,
+      monsterIndex: index,
+      queuedMonsterIndex: index,
+    }
+    const stats = deriveStats(nextPlayer, items)
+    set({
+      player: nextPlayer,
+      items,
+      stats,
+      screen: 'combat',
+      huntsOpen: false,
+      realmPickerOpen: false,
+      monsterIndex: index,
+      queuedMonsterIndex: index,
+      unseenItemIds: leaveBag ? [] : unseenItemIds,
+      combat: rebuildCombat(nextPlayer, stats, index, combat),
+      dirty: true,
+    })
+    return { ok: true }
   },
 
   tick: (dt = TICK_MS) => {
@@ -826,8 +888,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
       huntNotices: huntNotices.filter((notice) => notice.id !== id),
       dirty: true,
     })
-    if (outcome.boardSealed) void confirmPendingHuntSeal()
     return { ok: true, boardSealed: outcome.boardSealed, rewardText: outcome.rewardText }
+  },
+
+  claimBoardDiamonds: () => {
+    const { player } = get()
+    if (!player) return { ok: false, reason: 'Not ready.' }
+    const outcome = claimSealDiamonds(player)
+    if (!outcome.ok) return outcome
+    set({ player: outcome.player, dirty: true })
+    void confirmPendingHuntSeal()
+    return { ok: true, rewardText: outcome.rewardText }
   },
 
   challengeBoss: () => {

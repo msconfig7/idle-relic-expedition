@@ -319,16 +319,14 @@ textarea {
 @keyframes contract-deal {
   from {
     opacity: 0;
-    transform: translateY(8px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
 .contract-deal {
-  animation: contract-deal 420ms ease-out both;
+  animation: contract-deal 180ms ease-out;
 }
 
 .contract-stamp {

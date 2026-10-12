@@ -645,6 +645,7 @@ function huntFromUnknown(value) {
 		finalBossCleared: Boolean(raw.finalBossCleared),
 		contracts,
 		nextBoardAt: optionalTime(raw.nextBoardAt),
+		diamondRewardBoard: optionalBoard(raw.diamondRewardBoard),
 		unconfirmedSealBoard: optionalBoard(raw.unconfirmedSealBoard)
 	};
 }
@@ -789,13 +790,16 @@ function boardCooling(hunt, now) {
 function resolveBoard(player, hunt, now) {
 	const scaled = scaleOpenContracts(hunt);
 	const sealed = scaled.contracts.length === 3 && scaled.contracts.every((contract) => contract.claimed);
-	if (sealed && boardCooling(scaled, now)) return scaled;
+	const diamondsWaiting = scaled.diamondRewardBoard != null || scaled.unconfirmedSealBoard != null;
+	if (sealed && (boardCooling(scaled, now) || diamondsWaiting)) return scaled;
 	if (sealed && scaled.nextBoardAt != null) {
 		const board = scaled.board + 1;
 		return {
 			...scaled,
 			board,
 			nextBoardAt: null,
+			diamondRewardBoard: null,
+			unconfirmedSealBoard: null,
 			contracts: rollBoard(player.id, player.realmId, board)
 		};
 	}
@@ -865,6 +869,7 @@ function migratePlayer(player) {
 		finalBossCleared: false,
 		contracts: [],
 		nextBoardAt: null,
+		diamondRewardBoard: null,
 		unconfirmedSealBoard: null
 	});
 	if ((player.contentVersion ?? 1) >= 3) return seeded;
@@ -7943,6 +7948,7 @@ function playerFromRow(row) {
 			finalBossCleared: false,
 			contracts: [],
 			nextBoardAt: null,
+			diamondRewardBoard: null,
 			unconfirmedSealBoard: null
 		}
 	});

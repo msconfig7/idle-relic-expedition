@@ -52,6 +52,7 @@ export function huntFromUnknown(value: unknown): HuntState | undefined {
     finalBossCleared: Boolean(raw.finalBossCleared),
     contracts,
     nextBoardAt: optionalTime(raw.nextBoardAt),
+    diamondRewardBoard: optionalBoard(raw.diamondRewardBoard),
     unconfirmedSealBoard: optionalBoard(raw.unconfirmedSealBoard),
   }
 }
@@ -185,13 +186,16 @@ function boardCooling(hunt: HuntState, now: number): boolean {
 function resolveBoard(player: PlayerState, hunt: HuntState, now: number): HuntState {
   const scaled = scaleOpenContracts(hunt)
   const sealed = scaled.contracts.length === 3 && scaled.contracts.every((contract) => contract.claimed)
-  if (sealed && boardCooling(scaled, now)) return scaled
+  const diamondsWaiting = scaled.diamondRewardBoard != null || scaled.unconfirmedSealBoard != null
+  if (sealed && (boardCooling(scaled, now) || diamondsWaiting)) return scaled
   if (sealed && scaled.nextBoardAt != null) {
     const board = scaled.board + 1
     return {
       ...scaled,
       board,
       nextBoardAt: null,
+      diamondRewardBoard: null,
+      unconfirmedSealBoard: null,
       contracts: rollBoard(player.id, player.realmId, board),
     }
   }
@@ -267,24 +271,42 @@ export function claimHunt(
   const boardSealed = contracts.every((entry) => entry.claimed)
   const essences = { ...ready.essences }
   essences[contract.reward.essenceId] = (essences[contract.reward.essenceId] ?? 0) + contract.reward.essence
-  const rewardText = boardSealed
-    ? `${rewardLine(contract)} · +${HUNT_SEAL_DIAMONDS} diamonds. New hunts in 2 hours.`
-    : rewardLine(contract)
   return {
     ok: true,
     boardSealed,
-    rewardText,
+    rewardText: rewardLine(contract),
     player: {
       ...ready,
       gold: ready.gold + contract.reward.gold,
       scrap: ready.scrap + contract.reward.scrap,
-      diamonds: ready.diamonds + (boardSealed ? HUNT_SEAL_DIAMONDS : 0),
       essences,
       hunt: {
         ...ready.hunt,
         contracts,
         nextBoardAt: boardSealed ? now + HUNT_BOARD_COOLDOWN_MS : ready.hunt.nextBoardAt,
-        unconfirmedSealBoard: boardSealed ? ready.hunt.board : ready.hunt.unconfirmedSealBoard,
+        diamondRewardBoard: boardSealed ? ready.hunt.board : ready.hunt.diamondRewardBoard,
+      },
+    },
+  }
+}
+
+export function claimSealDiamonds(
+  player: PlayerState,
+): { ok: true; player: PlayerState; rewardText: string } | { ok: false; reason: string } {
+  const hunt = player.hunt
+  const sealed = hunt.contracts.length === 3 && hunt.contracts.every((contract) => contract.claimed)
+  if (!sealed) return { ok: false, reason: 'Seal every hunt first.' }
+  if (hunt.diamondRewardBoard == null) return { ok: false, reason: 'The diamonds are already claimed.' }
+  return {
+    ok: true,
+    rewardText: `+${HUNT_SEAL_DIAMONDS} diamonds`,
+    player: {
+      ...player,
+      diamonds: player.diamonds + HUNT_SEAL_DIAMONDS,
+      hunt: {
+        ...hunt,
+        diamondRewardBoard: null,
+        unconfirmedSealBoard: hunt.board,
       },
     },
   }

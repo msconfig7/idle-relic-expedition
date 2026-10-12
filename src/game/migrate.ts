@@ -13,6 +13,7 @@ export function migratePlayer(player: PlayerState): PlayerState {
       finalBossCleared: false,
       contracts: [],
       nextBoardAt: null,
+      diamondRewardBoard: null,
       unconfirmedSealBoard: null,
     },
   )

@@ -23,6 +23,7 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
       finalBossCleared: false,
       contracts: [],
       nextBoardAt: null,
+      diamondRewardBoard: null,
       unconfirmedSealBoard: null,
     },
     skillPointsUnspent: 3,

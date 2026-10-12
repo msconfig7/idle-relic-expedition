@@ -31,6 +31,7 @@ function readLocal(): SaveBlob | null {
         finalBossCleared: false,
         contracts: [],
         nextBoardAt: null,
+        diamondRewardBoard: null,
         unconfirmedSealBoard: null,
       },
     })
