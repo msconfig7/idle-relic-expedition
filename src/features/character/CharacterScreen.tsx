@@ -117,9 +117,10 @@ export function CharacterScreen() {
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
-              className="rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-900 px-3 py-1.5 text-sm text-orange-50"
               onClick={() => setForgeItemId(selected.id)}
             >
+              <AnvilIcon />
               Forge
             </button>
             <button
@@ -177,6 +178,18 @@ function EquipSlotTile({
       {!filled && !blocked ? <span className="sr-only">{slotLabel(slot)}</span> : null}
       {blocked ? <span className="sr-only">Occupied by two-handed weapon</span> : null}
     </button>
+  )
+}
+
+function AnvilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="currentColor" aria-hidden>
+      <path d="M1 12.7 8 10.1v4.3L1 13.6Z" />
+      <path d="M7.2 9h9.4v6H7.2Z" />
+      <path d="M15.8 10.4H22v3.8h-6.2Z" />
+      <path d="M9 14.6h6.4l-1 3.1h-4.4Z" />
+      <path d="M5.2 17.4h13.6v3.1H5.2Z" />
+    </svg>
   )
 }
 
