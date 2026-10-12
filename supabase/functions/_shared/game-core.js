@@ -620,12 +620,16 @@ function chance(rng, p) {
 }
 //#endregion
 //#region src/game/contracts.ts
-var emptyHunt = () => ({
-	killsTowardElite: 0,
-	board: 1,
-	finalBossCleared: false,
-	contracts: []
-});
+function optionalTime(value) {
+	const time = Number(value);
+	if (!Number.isFinite(time) || time <= 0) return null;
+	return Math.floor(time);
+}
+function optionalBoard(value) {
+	const board = Math.floor(Number(value));
+	if (!Number.isFinite(board) || board <= 0) return null;
+	return board;
+}
 function isContract(value) {
 	if (!value || typeof value !== "object") return false;
 	const row = value;
@@ -639,12 +643,69 @@ function huntFromUnknown(value) {
 		killsTowardElite: Math.max(0, Math.floor(Number(raw.killsTowardElite ?? 0)) || 0),
 		board: Math.max(1, Math.floor(Number(raw.board ?? 1)) || 1),
 		finalBossCleared: Boolean(raw.finalBossCleared),
-		contracts
+		contracts,
+		nextBoardAt: optionalTime(raw.nextBoardAt),
+		unconfirmedSealBoard: optionalBoard(raw.unconfirmedSealBoard)
 	};
 }
 function pickIndex(rng, count) {
 	if (count <= 1) return 0;
 	return Math.floor(rng() * count);
+}
+function quarryNumbers(realmId, kind) {
+	if (kind === "elite") return {
+		target: 6 + realmId * 2,
+		gold: 400 * realmId,
+		scrap: 18 * realmId,
+		essence: 9
+	};
+	if (kind === "realm") return {
+		target: 60 + realmId * 24,
+		gold: 300 * realmId,
+		scrap: 15 * realmId,
+		essence: 6
+	};
+	return {
+		target: 48 + realmId * 20,
+		gold: 260 * realmId,
+		scrap: 12 * realmId,
+		essence: 6
+	};
+}
+function quarryDetail(contract, target) {
+	if (contract.kind === "elite") return `Slay ${target} elites`;
+	if (contract.kind === "realm") return `Slay ${target} foes in ${contract.title}`;
+	return `Slay ${target} ${contract.title}`;
+}
+function scaleOpenContract(contract) {
+	if (contract.claimed) return contract;
+	const numbers = quarryNumbers(contract.realmId, contract.kind);
+	const detail = quarryDetail(contract, numbers.target);
+	if (contract.target === numbers.target && contract.detail === detail && contract.reward.gold === numbers.gold && contract.reward.scrap === numbers.scrap && contract.reward.essence === numbers.essence) return contract;
+	return {
+		...contract,
+		target: numbers.target,
+		detail,
+		progress: Math.min(contract.progress, numbers.target),
+		reward: {
+			...contract.reward,
+			gold: numbers.gold,
+			scrap: numbers.scrap,
+			essence: numbers.essence
+		}
+	};
+}
+function scaleOpenContracts(hunt) {
+	let changed = false;
+	const contracts = hunt.contracts.map((contract) => {
+		const next = scaleOpenContract(contract);
+		if (next !== contract) changed = true;
+		return next;
+	});
+	return changed ? {
+		...hunt,
+		contracts
+	} : hunt;
 }
 function rollBoard(playerId, realmId, board) {
 	const realm = getRealm(realmId);
@@ -653,9 +714,9 @@ function rollBoard(playerId, realmId, board) {
 	const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0];
 	const essencePool = essencesInRealm(realm.id);
 	const essenceFor = (fallback) => essencePool[pickIndex(rng, essencePool.length)]?.id ?? fallback;
-	const monsterTarget = 18 + realm.id * 8;
-	const eliteTarget = 2 + Math.floor(realm.id / 2);
-	const realmTarget = 24 + realm.id * 10;
+	const monsterNumbers = quarryNumbers(realm.id, "monster");
+	const eliteNumbers = quarryNumbers(realm.id, "elite");
+	const realmNumbers = quarryNumbers(realm.id, "realm");
 	const monsterEssence = monster?.id ?? essenceFor("dust-mite");
 	const eliteEssence = essenceFor(monsterEssence);
 	const realmEssence = essenceFor(monsterEssence);
@@ -664,76 +725,107 @@ function rollBoard(playerId, realmId, board) {
 			id: `${board}:monster`,
 			kind: "monster",
 			title: monster?.name ?? "Foes",
-			detail: `Slay ${monsterTarget} ${monster?.name ?? "foes"}`,
+			detail: quarryDetail({
+				kind: "monster",
+				title: monster?.name ?? "Foes"
+			}, monsterNumbers.target),
 			monsterId: monster?.id ?? null,
 			realmId: realm.id,
-			target: monsterTarget,
+			target: monsterNumbers.target,
 			progress: 0,
 			claimed: false,
 			reward: {
-				gold: 80 * realm.id,
-				scrap: 4 * realm.id,
+				gold: monsterNumbers.gold,
+				scrap: monsterNumbers.scrap,
 				essenceId: monsterEssence,
-				essence: 2
+				essence: monsterNumbers.essence
 			}
 		},
 		{
 			id: `${board}:elite`,
 			kind: "elite",
 			title: "Elites",
-			detail: `Slay ${eliteTarget} elites`,
+			detail: quarryDetail({
+				kind: "elite",
+				title: "Elites"
+			}, eliteNumbers.target),
 			monsterId: null,
 			realmId: realm.id,
-			target: eliteTarget,
+			target: eliteNumbers.target,
 			progress: 0,
 			claimed: false,
 			reward: {
-				gold: 120 * realm.id,
-				scrap: 6 * realm.id,
+				gold: eliteNumbers.gold,
+				scrap: eliteNumbers.scrap,
 				essenceId: eliteEssence,
-				essence: 3
+				essence: eliteNumbers.essence
 			}
 		},
 		{
 			id: `${board}:realm`,
 			kind: "realm",
 			title: realm.name,
-			detail: `Slay ${realmTarget} foes in ${realm.name}`,
+			detail: quarryDetail({
+				kind: "realm",
+				title: realm.name
+			}, realmNumbers.target),
 			monsterId: null,
 			realmId: realm.id,
-			target: realmTarget,
+			target: realmNumbers.target,
 			progress: 0,
 			claimed: false,
 			reward: {
-				gold: 90 * realm.id,
-				scrap: 5 * realm.id,
+				gold: realmNumbers.gold,
+				scrap: realmNumbers.scrap,
 				essenceId: realmEssence,
-				essence: 2
+				essence: realmNumbers.essence
 			}
 		}
 	];
 }
-function withHunt(player, hunt) {
-	const current = hunt ?? huntFromUnknown(player.hunt) ?? emptyHunt();
-	if (current.contracts.length === 3) return {
+function boardCooling(hunt, now) {
+	return hunt.nextBoardAt != null && now < hunt.nextBoardAt;
+}
+function resolveBoard(player, hunt, now) {
+	const scaled = scaleOpenContracts(hunt);
+	const sealed = scaled.contracts.length === 3 && scaled.contracts.every((contract) => contract.claimed);
+	if (sealed && boardCooling(scaled, now)) return scaled;
+	if (sealed && scaled.nextBoardAt != null) {
+		const board = scaled.board + 1;
+		return {
+			...scaled,
+			board,
+			nextBoardAt: null,
+			contracts: rollBoard(player.id, player.realmId, board)
+		};
+	}
+	if (scaled.contracts.length === 3) return scaled;
+	if (boardCooling(scaled, now)) return scaled;
+	const board = scaled.board || 1;
+	return {
+		...scaled,
+		board,
+		nextBoardAt: null,
+		contracts: rollBoard(player.id, player.realmId, board)
+	};
+}
+function withHunt(player, hunt, now = Date.now()) {
+	const current = hunt ?? player.hunt;
+	const next = resolveBoard(player, current, now);
+	if (next === current) return hunt === void 0 ? player : {
 		...player,
 		hunt: current
 	};
-	const board = current.board || 1;
 	return {
 		...player,
-		hunt: {
-			...current,
-			board,
-			contracts: rollBoard(player.id, player.realmId, board)
-		}
+		hunt: next
 	};
 }
 function dueElite(player) {
 	return player.hunt.killsTowardElite >= 8;
 }
-function noteKill(player, note) {
-	const ready = withHunt(player);
+function noteKill(player, note, now = Date.now()) {
+	const ready = withHunt(player, void 0, now);
 	const hunt = ready.hunt;
 	const killsTowardElite = note.boss ? hunt.killsTowardElite : note.elite ? 0 : hunt.killsTowardElite + 1;
 	const fulfilled = [];
@@ -771,7 +863,9 @@ function migratePlayer(player) {
 		killsTowardElite: 0,
 		board: 1,
 		finalBossCleared: false,
-		contracts: []
+		contracts: [],
+		nextBoardAt: null,
+		unconfirmedSealBoard: null
 	});
 	if ((player.contentVersion ?? 1) >= 3) return seeded;
 	let highestRealmId = seeded.highestRealmId;
@@ -2309,6 +2403,7 @@ function settleOffline(player, items, nowMs) {
 	let drops = 0;
 	let elites = 0;
 	const fulfilledHunts = [];
+	const killSpan = kills > 0 ? elapsed / kills : 0;
 	for (let i = 0; i < kills; i++) {
 		const elite = dueElite(nextPlayer);
 		const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex);
@@ -2319,7 +2414,7 @@ function settleOffline(player, items, nowMs) {
 			realmId: nextPlayer.realmId,
 			elite,
 			boss: false
-		});
+		}, base.lastSettledAt + Math.floor((i + 1) * killSpan));
 		nextPlayer = noted.player;
 		nextItems = result.items;
 		xp += result.reward.xp;
@@ -7846,7 +7941,9 @@ function playerFromRow(row) {
 			killsTowardElite: 0,
 			board: 1,
 			finalBossCleared: false,
-			contracts: []
+			contracts: [],
+			nextBoardAt: null,
+			unconfirmedSealBoard: null
 		}
 	});
 }

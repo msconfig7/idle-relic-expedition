@@ -13,7 +13,7 @@ import {
   strikeDamage,
 } from '../game'
 import { grantBossVictory, wardenAwaits, type RealmDoor } from '../game/boss'
-import { claimHunt, claimable, dueElite, noteKill } from '../game/contracts'
+import { claimHunt, claimable, dueElite, noteKill, withHunt } from '../game/contracts'
 import { spawnBoss } from '../game/combat'
 import {
   DOT_MS,
@@ -46,6 +46,7 @@ import type {
   OfflineGrant,
   PlayerState,
 } from '../game/types'
+import { confirmHuntSeal } from '../lib/huntSeal'
 import { persistSave } from '../lib/persist'
 import { create } from 'zustand'
 
@@ -121,7 +122,7 @@ type GameStore = {
   closeHunts: () => void
   claimContract: (
     id: string,
-  ) => { ok: true; refreshed: boolean; rewardText: string } | { ok: false; reason: string }
+  ) => { ok: true; boardSealed: boolean; rewardText: string } | { ok: false; reason: string }
   challengeBoss: () => void
   resumeBoss: (awayMs: number) => boolean
   acknowledgeDoor: () => void
@@ -255,6 +256,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       huntNotices: claimable(resumed.hunt).map((contract) => ({ id: contract.id, title: contract.title })),
       dirty: false,
     })
+    if (resumed.hunt.unconfirmedSealBoard != null) void confirmPendingHuntSeal()
   },
 
   setScreen: (screen) => {
@@ -297,11 +299,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const { paused, player, items, combat, stats, monsterIndex, queuedMonsterIndex } = get()
     if (paused || !player || !combat || !stats) return
 
-    let nextPlayer = player
+    let nextPlayer = withHunt(player)
     let nextItems = items
     let nextStats = stats
     let nextMonsterIndex = monsterIndex
-    let dirty = false
+    let dirty = nextPlayer !== player
     let nextUnseen = get().unseenItemIds
     let huntNotices = get().huntNotices
     let realmDoor = get().realmDoor
@@ -824,7 +826,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       huntNotices: huntNotices.filter((notice) => notice.id !== id),
       dirty: true,
     })
-    return { ok: true, refreshed: outcome.refreshed, rewardText: outcome.rewardText }
+    if (outcome.boardSealed) void confirmPendingHuntSeal()
+    return { ok: true, boardSealed: outcome.boardSealed, rewardText: outcome.rewardText }
   },
 
   challengeBoss: () => {
@@ -895,3 +898,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ player: stamped, dirty: false })
   },
 }))
+
+async function confirmPendingHuntSeal(): Promise<void> {
+  const { player, items } = useGameStore.getState()
+  if (!player || player.hunt.unconfirmedSealBoard == null) return
+  const sealed =
+    player.hunt.unconfirmedSealBoard === player.hunt.board &&
+    player.hunt.contracts.length === 3 &&
+    player.hunt.contracts.every((contract) => contract.claimed)
+  if (!sealed) {
+    useGameStore.setState({
+      player: { ...player, hunt: { ...player.hunt, unconfirmedSealBoard: null } },
+      dirty: true,
+    })
+    return
+  }
+  try {
+    const diamonds = await confirmHuntSeal(player, items)
+    const current = useGameStore.getState().player
+    if (!current || current.hunt.unconfirmedSealBoard == null) return
+    if (diamonds == null) {
+      useGameStore.setState({
+        player: { ...current, hunt: { ...current.hunt, unconfirmedSealBoard: null } },
+        dirty: true,
+      })
+      return
+    }
+    useGameStore.setState({
+      player: {
+        ...current,
+        diamonds,
+        hunt: { ...current.hunt, unconfirmedSealBoard: null },
+      },
+      dirty: true,
+    })
+  } catch (error) {
+    console.error(error)
+  }
+}

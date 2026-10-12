@@ -12,6 +12,8 @@ export function migratePlayer(player: PlayerState): PlayerState {
       board: 1,
       finalBossCleared: false,
       contracts: [],
+      nextBoardAt: null,
+      unconfirmedSealBoard: null,
     },
   )
   if ((player.contentVersion ?? 1) >= 3) return seeded

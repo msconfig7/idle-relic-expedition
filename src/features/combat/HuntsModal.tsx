@@ -2,19 +2,44 @@ import { rewardLine } from '../../game/contracts'
 import type { HuntContract } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import { Modal } from '../ui/Modal'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+
+function formatWait(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const seconds = total % 60
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, '0')}m`
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+}
 
 export function HuntsModal({ onClose }: { onClose: () => void }) {
   const player = useGameStore((s) => s.player)!
   const claimContract = useGameStore((s) => s.claimContract)
   const [flash, setFlash] = useState<string | null>(null)
+  const [now, setNow] = useState(() => Date.now())
   const contracts = player.hunt.contracts
+  const nextBoardAt = player.hunt.nextBoardAt
+  const boardSealed = contracts.length > 0 && contracts.every((contract) => contract.claimed)
+  const waiting = boardSealed && nextBoardAt != null && nextBoardAt > now
+
+  useEffect(() => {
+    if (!waiting) return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [waiting])
 
   return (
     <Modal title="Hunt board" onClose={onClose}>
       <p className="text-[11px] leading-4 text-stone-400">
-        Three quarries. Fill a slip, then press the seal to take the reward. Clear the board and a new set is posted.
+        Three quarries. Fill a slip, then press the seal to take the reward. Seal the whole board for 3 diamonds.
+        New hunts are posted two hours later.
       </p>
+      {waiting && nextBoardAt != null && (
+        <p className="mt-2 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm text-stone-200">
+          Board sealed. New hunts in {formatWait(nextBoardAt - now)}.
+        </p>
+      )}
       {flash && (
         <p className="hunt-toast mt-2 rounded-lg border border-amber-700/70 bg-amber-950/70 px-3 py-2 text-sm text-amber-100">
           {flash}
@@ -32,7 +57,7 @@ export function HuntsModal({ onClose }: { onClose: () => void }) {
                 setFlash(outcome.reason)
                 return
               }
-              setFlash(outcome.refreshed ? 'Board cleared. New hunts are posted.' : outcome.rewardText)
+              setFlash(outcome.rewardText)
             }}
           />
         ))}
@@ -56,7 +81,7 @@ function ContractCard({
     <article
       className={`contract-deal relative overflow-hidden rounded-xl border px-3 py-2.5 ${
         contract.claimed
-          ? 'border-stone-800 bg-stone-950/80'
+          ? 'border-stone-700 bg-stone-950'
           : ready
             ? 'contract-ready border-amber-600/80 bg-gradient-to-br from-amber-200/15 via-stone-900 to-stone-950'
             : 'border-amber-900/50 bg-gradient-to-br from-amber-100/10 via-stone-900 to-stone-950'
@@ -66,10 +91,13 @@ function ContractCard({
       <div className="flex items-start gap-2">
         <Seal kind={contract.kind} ready={ready} claimed={contract.claimed} />
         <div className="min-w-0 flex-1">
-          <p className="text-[10px] uppercase tracking-[0.18em] text-amber-600/90">
-            {contract.kind === 'elite' ? 'Elite quarry' : contract.kind === 'realm' ? 'Realm sweep' : 'Named prey'}
-          </p>
-          <p className={`font-serif text-base leading-tight ${contract.claimed ? 'text-stone-500' : 'text-amber-50'}`}>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] uppercase tracking-[0.18em] text-amber-600/90">
+              {contract.kind === 'elite' ? 'Elite quarry' : contract.kind === 'realm' ? 'Realm sweep' : 'Named prey'}
+            </p>
+            {contract.claimed && <span className="contract-stamp">Sealed</span>}
+          </div>
+          <p className={`font-serif text-base leading-tight ${contract.claimed ? 'text-stone-300' : 'text-amber-50'}`}>
             {contract.detail}
           </p>
           <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/50">
@@ -93,7 +121,6 @@ function ContractCard({
           Seal and collect
         </button>
       )}
-      {contract.claimed && <span className="contract-stamp">Sealed</span>}
     </article>
   )
 }
@@ -104,7 +131,7 @@ function Seal({ kind, ready, claimed }: { kind: HuntContract['kind']; ready: boo
     <span
       className={`grid h-9 w-9 shrink-0 place-items-center rounded-full border text-sm ${
         claimed
-          ? 'border-stone-700 text-stone-600'
+          ? 'border-stone-600 bg-stone-900 text-stone-400'
           : ready
             ? 'border-amber-300 bg-amber-500 text-stone-950'
             : 'border-amber-800/80 bg-amber-950 text-amber-200'
