@@ -62,7 +62,7 @@ Deno.serve(async (req) => {
   const grant = settleOffline(player, items, Date.now())
 
   const row = playerToRow(grant.player)
-  const { diamonds: _diamonds, ...progress } = row
+  const { diamonds: _diamonds, bag_level: _bagLevel, ...progress } = row
   const { error: updateError } = await supabase.from('players').update(progress).eq('id', user.id)
   if (updateError) {
     return json({ error: updateError.message }, 400)

@@ -7,8 +7,8 @@ import {
 import { equippedInSlot, slotsForType } from '../../game/equipment'
 import { salvageScrap } from '../../game/salvage'
 import { RARITY_CHIP, RARITY_CLASS, RARITY_LABEL, RARITY_TEXT } from '../../game/rarity'
+import { bagCapacity } from '../../game/bag'
 import {
-  MAX_INVENTORY,
   RARITIES,
   SLOT_TYPES,
   type Item,
@@ -17,6 +17,7 @@ import {
 } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import { ForgeModal } from '../craft/ForgeModal'
+import { ExpandBagModal } from './ExpandBagModal'
 import { ItemCard, slotLabel } from '../items/ItemCard'
 import { SwapCompare } from '../items/SwapCompare'
 import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
@@ -26,6 +27,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 const LONG_PRESS_MS = 450
 
 export function InventoryScreen() {
+  const player = useGameStore((s) => s.player)
   const items = useGameStore((s) => s.items)
   const selectedItemId = useGameStore((s) => s.selectedItemId)
   const selectItem = useGameStore((s) => s.selectItem)
@@ -36,6 +38,7 @@ export function InventoryScreen() {
   const unseen = useMemo(() => new Set(unseenItemIds), [unseenItemIds])
   const selected = items.find((item) => item.id === selectedItemId && !item.equippedSlot)
   const [filterOpen, setFilterOpen] = useState(false)
+  const [expandOpen, setExpandOpen] = useState(false)
   const [types, setTypes] = useState<SlotType[]>([])
   const [rarities, setRarities] = useState<Rarity[]>([])
   const [draftTypes, setDraftTypes] = useState<SlotType[]>([])
@@ -215,10 +218,29 @@ export function InventoryScreen() {
       <div className="mb-3 flex items-end justify-between gap-2">
         <div>
           <h2 className="font-serif text-xl text-amber-100">Equipment</h2>
-          <p className="text-sm text-stone-400">
-            {unequipped.length}/{MAX_INVENTORY} in bag
-            {salvageMode ? ` · ${salvagePickCount} selected` : ''}
-            {ascendMode && keeper ? ` · sacrifice ${chosenFodderIds.length}/${ASCEND_SACRIFICE_COUNT}` : ''}
+          <p className="flex items-center gap-1.5 text-sm text-stone-400">
+            <span className="tabular-nums">
+              {unequipped.length}/{bagCapacity(player?.bagLevel)}
+              {salvageMode ? ` · ${salvagePickCount} selected` : ''}
+              {ascendMode && keeper ? ` · sacrifice ${chosenFodderIds.length}/${ASCEND_SACRIFICE_COUNT}` : ''}
+            </span>
+            <button
+              type="button"
+              aria-label="Expand bag"
+              title="Expand bag"
+              className="grid h-[1.35rem] w-[1.35rem] shrink-0 place-items-center rounded-full border border-amber-600/80 bg-stone-950 text-amber-200"
+              onClick={() => setExpandOpen(true)}
+            >
+              <svg viewBox="0 0 16 16" className="h-3 w-3" aria-hidden="true">
+                <path
+                  d="M8 3v10M3 8h10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
           </p>
         </div>
         <div className="flex flex-wrap justify-end gap-1.5">
@@ -466,6 +488,7 @@ export function InventoryScreen() {
         </Modal>
       )}
       {forgeItemId && <ForgeModal itemId={forgeItemId} onClose={() => setForgeItemId(null)} />}
+      {expandOpen && <ExpandBagModal onClose={() => setExpandOpen(false)} />}
       {salvageOpen && (
         <Modal
           title="Mass salvage"

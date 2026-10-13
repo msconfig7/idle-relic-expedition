@@ -1,3 +1,4 @@
+import { clampBagLevel } from './bag'
 import { withHunt, huntFromUnknown } from './contracts'
 import { nextRealm } from './combat'
 import { CONTENT_VERSION, REALM_PROGRESS_CAP } from './types'
@@ -5,8 +6,9 @@ import type { PlayerState } from './types'
 
 export function migratePlayer(player: PlayerState): PlayerState {
   const progressRealmId = player.progressRealmId || player.realmId
+  const bagLevel = clampBagLevel(player.bagLevel)
   const seeded = withHunt(
-    { ...player, progressRealmId },
+    { ...player, progressRealmId, bagLevel },
     huntFromUnknown(player.hunt) ?? {
       killsTowardElite: 0,
       board: 1,

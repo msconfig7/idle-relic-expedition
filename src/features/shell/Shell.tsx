@@ -1,7 +1,7 @@
 import { HuntsModal } from '../combat/HuntsModal'
 import { getRealm, xpIntoLevel, xpToNext } from '../../game'
 import { killXp } from '../../game/xpForecast'
-import { MAX_INVENTORY } from '../../game/types'
+import { bagCapacity } from '../../game/bag'
 import { RARITY_TEXT } from '../../game/rarity'
 import { supabase } from '../../lib/supabase'
 import { useGameStore } from '../../state/gameStore'
@@ -41,7 +41,7 @@ export function Shell({ children }: { children: ReactNode }) {
   const items = useGameStore((s) => s.items)
   const unseenItemIds = useGameStore((s) => s.unseenItemIds)
   const bagCount = items.filter((item) => !item.equippedSlot).length
-  const bagFull = bagCount >= MAX_INVENTORY
+  const bagFull = bagCount >= bagCapacity(player.bagLevel)
   const newBagCount = unseenItemIds.length
   const realm = getRealm(player.realmId)
   const into = xpIntoLevel(player.xp, player.level)

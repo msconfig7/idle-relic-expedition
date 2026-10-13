@@ -89,8 +89,7 @@ export async function persistSave(player: PlayerState, items: Item[]): Promise<v
   }
 
   const row = playerToRow(player)
-  const progress = { ...row }
-  delete (progress as { diamonds?: number }).diamonds
+  const { diamonds: _diamonds, bag_level: _bagLevel, ...progress } = row
   const { error } = await supabase.from('players').update(progress).eq('id', player.id)
   if (error) throw error
 

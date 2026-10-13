@@ -46,6 +46,8 @@ import type {
   OfflineGrant,
   PlayerState,
 } from '../game/types'
+import { purchaseBagUpgrade, type BagPayWith } from '../game/bag'
+import { confirmBagExpand } from '../lib/expandBag'
 import { confirmHuntSeal } from '../lib/huntSeal'
 import { persistSave } from '../lib/persist'
 import { create } from 'zustand'
@@ -113,6 +115,7 @@ type GameStore = {
     index: number,
   ) => { ok: true; success: boolean } | { ok: false; reason: string }
   ascendItem: (keeperId: string, fodderIds: string[]) => { ok: true; item: Item } | { ok: false; reason: string }
+  expandBag: (payWith: BagPayWith) => Promise<{ ok: true } | { ok: false; reason: string }>
   queueNode: (nodeId: number) => void
   confirmNodes: () => void
   discardNodes: () => void
@@ -961,14 +964,56 @@ export const useGameStore = create<GameStore>((set, get) => ({
   acknowledgeDoor: () => set({ realmDoor: null }),
   acknowledgeBossFled: () => set({ bossFled: false }),
 
-  persistNow: async () => {
-    const { player, items } = get()
-    if (!player) return
-    const stamped = { ...player, lastSettledAt: Date.now() }
-    await persistSave(stamped, items)
-    set({ player: stamped, dirty: false })
-  },
+  expandBag: (payWith) =>
+    enqueueSave(async () => {
+      const { player, items } = get()
+      if (!player) return { ok: false as const, reason: 'Not ready.' }
+      const preview = purchaseBagUpgrade(player, payWith)
+      if (!preview.ok) return preview
+      try {
+        const remote = await confirmBagExpand(player, items, payWith)
+        if (remote == null) {
+          set({ player: preview.player, dirty: true })
+          return { ok: true as const }
+        }
+        const current = get().player
+        if (!current) return { ok: false as const, reason: 'Not ready.' }
+        set({
+          player: {
+            ...current,
+            gold: Math.max(0, current.gold + (remote.gold - player.gold)),
+            diamonds: Math.max(0, current.diamonds + (remote.diamonds - player.diamonds)),
+            bagLevel: remote.bagLevel,
+          },
+          dirty: true,
+        })
+        return { ok: true as const }
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : 'The bag could not expand.'
+        return { ok: false as const, reason }
+      }
+    }),
+
+  persistNow: () =>
+    enqueueSave(async () => {
+      const { player, items } = get()
+      if (!player) return
+      const stamped = { ...player, lastSettledAt: Date.now() }
+      await persistSave(stamped, items)
+      set({ player: stamped, dirty: false })
+    }),
 }))
+
+let saveQueue: Promise<unknown> = Promise.resolve()
+
+function enqueueSave<T>(task: () => Promise<T>): Promise<T> {
+  const run = saveQueue.then(task, task)
+  saveQueue = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
 
 async function confirmPendingHuntSeal(): Promise<void> {
   const { player, items } = useGameStore.getState()

@@ -28,6 +28,7 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
     },
     skillPointsUnspent: 3,
     allocatedNodeIds: [],
+    bagLevel: 1,
     lastSettledAt: now,
     contentVersion: CONTENT_VERSION,
   })
