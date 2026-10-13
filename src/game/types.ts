@@ -1,6 +1,7 @@
 export const CONTENT_VERSION = 3
 export const REALM_PROGRESS_CAP = 10_000
-export const ELITE_EVERY = 8
+/** Base chance that the next non-boss fight is an elite. */
+export const ELITE_SPAWN_CHANCE = 0.05
 export const BOSS_FAIL_MS = 2_600
 export const TICK_MS = 125
 export const PERSIST_MS = 12_000
@@ -65,6 +66,7 @@ export const STAT_KEYS = [
   'materialDrop',
   'hpRegen',
   'lifeSteal',
+  'eliteChance',
 ] as const
 
 export type StatKey = (typeof STAT_KEYS)[number]
@@ -85,6 +87,7 @@ export const STAT_LABELS: Record<StatKey, string> = {
   materialDrop: 'Material Drop',
   hpRegen: 'HP Regen',
   lifeSteal: 'Life Steal',
+  eliteChance: 'Elite Spawn',
 }
 
 export const STAT_HELP: Record<StatKey, string> = {
@@ -103,6 +106,7 @@ export const STAT_HELP: Record<StatKey, string> = {
   materialDrop: 'Chance a kill drops scrap and that monster\'s essence.',
   hpRegen: 'HP recovered per second in combat. Kills do not refill life.',
   lifeSteal: 'Percent of damage dealt returned as HP.',
+  eliteChance: 'Chance the next foe is an elite. Losing to an elite skips the following elite.',
 }
 
 export type Affix = {
@@ -263,6 +267,8 @@ export type HuntContract = {
 
 export type HuntState = {
   killsTowardElite: number
+  /** The next non-boss spawn is forced to a normal monster. Set after losing to an elite. */
+  suppressElite: boolean
   board: number
   finalBossCleared: boolean
   contracts: HuntContract[]
@@ -300,6 +306,8 @@ export type CombatSnapshot = {
   bossTimeLeftMs: number
   bossPauseMs: number
   bossFailed: boolean
+  /** Elite faded out after a loss. The replacement fight starts the downed timer. */
+  eliteRetreat: boolean
   ambushReady: boolean
   enraged: boolean
   burnMs: number

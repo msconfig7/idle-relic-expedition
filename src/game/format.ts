@@ -6,6 +6,7 @@ export function isPercentStat(stat: StatKey): boolean {
     stat === 'block' ||
     stat === 'itemDrop' ||
     stat === 'materialDrop' ||
+    stat === 'eliteChance' ||
     stat === 'critMulti' ||
     stat === 'xpMod' ||
     stat === 'goldMod' ||

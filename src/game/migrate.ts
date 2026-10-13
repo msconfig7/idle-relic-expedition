@@ -9,6 +9,7 @@ export function migratePlayer(player: PlayerState): PlayerState {
     { ...player, progressRealmId },
     huntFromUnknown(player.hunt) ?? {
       killsTowardElite: 0,
+      suppressElite: false,
       board: 1,
       finalBossCleared: false,
       contracts: [],

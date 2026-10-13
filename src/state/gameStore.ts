@@ -13,7 +13,7 @@ import {
   strikeDamage,
 } from '../game'
 import { grantBossVictory, wardenAwaits, type RealmDoor } from '../game/boss'
-import { claimHunt, claimSealDiamonds, claimable, dueElite, noteKill, withHunt } from '../game/contracts'
+import { claimHunt, claimSealDiamonds, claimable, consumeEliteSpawn, noteKill, suppressNextElite, withHunt } from '../game/contracts'
 import { spawnBoss } from '../game/combat'
 import {
   DOT_MS,
@@ -176,31 +176,38 @@ function rebuildCombat(
   stats: DerivedStats,
   monsterIndex: number,
   previous?: CombatSnapshot | null,
-): CombatSnapshot {
+): { player: PlayerState; combat: CombatSnapshot } {
   const realm = getRealm(player.realmId)
   const def = pickMonster(realm, monsterIndex)
   const keepHp = previous ? Math.min(previous.playerHp, stats.hp) : stats.hp
+  const encounter = (previous?.encounter ?? 0) + 1
+  const rng = mulberry32(hashSeed(`${player.id}:elite-spawn:${encounter}:${player.realmId}:${monsterIndex}`))
+  const rolled = consumeEliteSpawn(player, stats.eliteChance, rng)
   return {
-    monster: spawnMonster(def, dueElite(player)),
-    playerHp: previous?.deathCooldownMs ? 0 : keepHp,
-    playerMaxHp: stats.hp,
-    playerSwing: 0,
-    monsterSwing: 0,
-    deathCooldownMs: previous?.deathCooldownMs ?? 0,
-    despawnMs: 0,
-    encounter: (previous?.encounter ?? 0) + 1,
-    log: previous?.log ?? [],
-    floats: [],
-    bossTimeLeftMs: 0,
-    bossPauseMs: 0,
-    bossFailed: false,
-    ambushReady: true,
-    enraged: false,
-    burnMs: 0,
-    burnDps: 0,
-    poisonMs: 0,
-    poisonDps: 0,
-    dotBuffer: 0,
+    player: rolled.player,
+    combat: {
+      monster: spawnMonster(def, rolled.elite),
+      playerHp: previous?.deathCooldownMs ? 0 : keepHp,
+      playerMaxHp: stats.hp,
+      playerSwing: 0,
+      monsterSwing: 0,
+      deathCooldownMs: previous?.deathCooldownMs ?? 0,
+      despawnMs: 0,
+      encounter,
+      log: previous?.log ?? [],
+      floats: [],
+      bossTimeLeftMs: 0,
+      bossPauseMs: 0,
+      bossFailed: false,
+      eliteRetreat: false,
+      ambushReady: true,
+      enraged: false,
+      burnMs: 0,
+      burnDps: 0,
+      poisonMs: 0,
+      poisonDps: 0,
+      dotBuffer: 0,
+    },
   }
 }
 
@@ -243,20 +250,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const stored = readUnseen(resumed.id)
     const fresh = items.filter((item) => !item.equippedSlot && !known.has(item.id)).map((item) => item.id)
     const unseenItemIds = mergeUnseen(resumed.id, stored, fresh, bagIds)
+    const opened = rebuildCombat(resumed, stats, monsterIndex)
     set({
       ready: true,
       paused: false,
-      player: resumed,
+      player: opened.player,
       items,
       stats,
-      combat: rebuildCombat(resumed, stats, monsterIndex),
+      combat: opened.combat,
       monsterIndex,
       queuedMonsterIndex,
       unseenItemIds,
       pendingNodeIds: [],
       pendingRemovalNodeIds: [],
-      huntNotices: claimable(resumed.hunt).map((contract) => ({ id: contract.id, title: contract.title })),
-      dirty: false,
+      huntNotices: claimable(opened.player.hunt).map((contract) => ({ id: contract.id, title: contract.title })),
+      dirty: opened.player !== resumed,
     })
     if (resumed.hunt.unconfirmedSealBoard != null) void confirmPendingHuntSeal()
   },
@@ -341,8 +349,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       queuedMonsterIndex: index,
     }
     const stats = deriveStats(nextPlayer, items)
+    const built = rebuildCombat(nextPlayer, stats, index, combat)
     set({
-      player: nextPlayer,
+      player: built.player,
       items,
       stats,
       screen: 'combat',
@@ -351,7 +360,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       monsterIndex: index,
       queuedMonsterIndex: index,
       unseenItemIds: leaveBag ? [] : unseenItemIds,
-      combat: rebuildCombat(nextPlayer, stats, index, combat),
+      combat: built.combat,
       dirty: true,
     })
     return { ok: true }
@@ -384,20 +393,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
         log: combat.log,
         floats: combat.floats.slice(-6),
       }
+      let revivedPlayer = player
       if (revived && queuedMonsterIndex !== monsterIndex) {
         nextMonsterIndex = queuedMonsterIndex
-        nextCombat = rebuildCombat(player, stats, nextMonsterIndex, {
+        const built = rebuildCombat(player, stats, nextMonsterIndex, {
           ...nextCombat,
           playerHp: stats.hp,
           deathCooldownMs: 0,
           bossFailed: false,
         })
+        nextCombat = built.combat
+        revivedPlayer = { ...built.player, monsterIndex: nextMonsterIndex }
       }
       set({
-        player: nextMonsterIndex === monsterIndex ? player : { ...player, monsterIndex: nextMonsterIndex },
+        player: nextMonsterIndex === monsterIndex ? player : revivedPlayer,
         combat: nextCombat,
         monsterIndex: nextMonsterIndex,
-        dirty: get().dirty || nextMonsterIndex !== monsterIndex,
+        dirty: get().dirty || revivedPlayer !== player,
       })
       return
     }
@@ -409,12 +421,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return
       }
       const spawnedIndex = queuedMonsterIndex
-      const indexChanged = spawnedIndex !== player.monsterIndex
+      const built = rebuildCombat(player, stats, spawnedIndex, { ...combat, bossPauseMs: 0 })
+      const spawnedPlayer =
+        spawnedIndex === built.player.monsterIndex ? built.player : { ...built.player, monsterIndex: spawnedIndex }
       set({
-        player: indexChanged ? { ...player, monsterIndex: spawnedIndex } : player,
-        combat: rebuildCombat(player, stats, spawnedIndex, { ...combat, bossPauseMs: 0 }),
+        player: spawnedPlayer,
+        combat: built.combat,
         monsterIndex: spawnedIndex,
-        dirty: get().dirty || indexChanged,
+        dirty: get().dirty || spawnedPlayer !== player,
       })
       return
     }
@@ -426,16 +440,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
         return
       }
       const spawnedIndex = queuedMonsterIndex
-      const spawned = {
-        ...rebuildCombat(player, stats, spawnedIndex, { ...combat, despawnMs: 0 }),
-        playerSwing: Math.min(PLAYER_SWING_MS - 1, DESPAWN_MS),
+      const built = rebuildCombat(player, stats, spawnedIndex, { ...combat, despawnMs: 0, eliteRetreat: false })
+      const retreating = combat.eliteRetreat
+      const spawned: CombatSnapshot = {
+        ...built.combat,
+        playerSwing: retreating ? 0 : Math.min(PLAYER_SWING_MS - 1, DESPAWN_MS),
+        monsterSwing: retreating ? 0 : built.combat.monsterSwing,
+        playerHp: retreating ? 0 : built.combat.playerHp,
+        deathCooldownMs: retreating ? DEATH_COOLDOWN_MS : built.combat.deathCooldownMs,
       }
-      const indexChanged = spawnedIndex !== player.monsterIndex
+      const spawnedPlayer =
+        spawnedIndex === built.player.monsterIndex ? built.player : { ...built.player, monsterIndex: spawnedIndex }
       set({
-        player: indexChanged ? { ...player, monsterIndex: spawnedIndex } : player,
+        player: spawnedPlayer,
         combat: spawned,
         monsterIndex: spawnedIndex,
-        dirty: get().dirty || indexChanged,
+        dirty: get().dirty || spawnedPlayer !== player,
       })
       return
     }
@@ -495,18 +515,40 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const downed = (snapshot: CombatSnapshot, wasBoss: boolean): CombatSnapshot => {
       nextMonsterIndex = queuedMonsterIndex
-      const spawned = rebuildCombat(nextPlayer, nextStats, nextMonsterIndex, {
+      const built = rebuildCombat(nextPlayer, nextStats, nextMonsterIndex, {
         ...snapshot,
         deathCooldownMs: DEATH_COOLDOWN_MS,
       })
+      nextPlayer =
+        built.player.monsterIndex === nextMonsterIndex
+          ? built.player
+          : { ...built.player, monsterIndex: nextMonsterIndex }
+      dirty = true
       return {
-        ...spawned,
+        ...built.combat,
         playerHp: 0,
         deathCooldownMs: DEATH_COOLDOWN_MS,
         bossFailed: wasBoss,
         log: snapshot.log,
         floats: snapshot.floats,
       }
+    }
+    const defeat = (snapshot: CombatSnapshot): CombatSnapshot => {
+      if (snapshot.monster.elite && !snapshot.monster.boss && snapshot.monster.hp > 0) {
+        nextPlayer = suppressNextElite(nextPlayer)
+        dirty = true
+        return {
+          ...snapshot,
+          playerHp: 0,
+          playerSwing: 0,
+          monsterSwing: 0,
+          deathCooldownMs: 0,
+          despawnMs: DESPAWN_MS,
+          eliteRetreat: true,
+          log: pushLog(snapshot.log, `${foeName(snapshot.monster)} withdraws.`),
+        }
+      }
+      return downed(snapshot, snapshot.monster.boss)
     }
     if (dotHit > 0 && nextCombat.playerHp > 0) {
       const beforeHp = nextCombat.playerHp
@@ -603,7 +645,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     if (nextCombat.playerHp <= 0) {
-      nextCombat = downed(nextCombat, combat.monster.boss)
+      nextCombat = defeat(nextCombat)
     } else if (nextCombat.monster.hp > 0 && nextCombat.monsterSwing >= monsterSwingLimit(nextCombat.monster)) {
       nextCombat.monsterSwing = 0
       if (rng() < nextStats.block) {
@@ -632,7 +674,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             : nextCombat.monster,
           floats: beforeHp > hp ? pushFloat(nextCombat.floats, `${damage}`, 'monster') : nextCombat.floats,
         }
-        if (hp <= 0) nextCombat = downed(nextCombat, combat.monster.boss)
+        if (hp <= 0) nextCombat = defeat(nextCombat)
       }
     }
 
@@ -864,13 +906,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const nextPlayer = { ...player, realmId, realmProgress, progressRealmId, monsterIndex: 0, queuedMonsterIndex: 0 }
     const stats = deriveStats(nextPlayer, items)
+    const built = rebuildCombat(nextPlayer, stats, 0, combat)
     set({
-      player: nextPlayer,
+      player: built.player,
       stats,
       monsterIndex: 0,
       queuedMonsterIndex: 0,
       realmPickerOpen: false,
-      combat: rebuildCombat(nextPlayer, stats, 0, combat),
+      combat: built.combat,
       dirty: true,
     })
   },
@@ -922,6 +965,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         bossTimeLeftMs: boss.timeLimitMs,
         bossPauseMs: 0,
         bossFailed: false,
+        eliteRetreat: false,
         ambushReady: true,
         enraged: false,
         burnMs: 0,

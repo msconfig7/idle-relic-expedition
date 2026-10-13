@@ -142,6 +142,53 @@ textarea {
   animation: monster-arrive 240ms ease-out;
 }
 
+.elite-glow {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  z-index: 0;
+  width: 9.25rem;
+  height: 9.25rem;
+  border-radius: 1.35rem;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(254, 249, 195, 0.72) 0%, rgba(245, 158, 11, 0.38) 42%, rgba(120, 53, 15, 0.16) 68%, transparent 78%);
+  box-shadow:
+    0 0 0 1px rgba(253, 230, 138, 0.28),
+    0 0 22px 8px rgba(251, 191, 36, 0.42),
+    inset 0 0 18px rgba(254, 243, 199, 0.28);
+  animation: elite-glow-pulse 2.4s ease-in-out infinite;
+}
+
+.elite-portrait {
+  filter:
+    drop-shadow(0 0 10px rgba(251, 191, 36, 0.9))
+    drop-shadow(0 0 18px rgba(217, 119, 6, 0.55))
+    drop-shadow(0 8px 12px rgba(0, 0, 0, 0.72));
+}
+
+.elite-glow-out {
+  animation: elite-glow-out 700ms ease-in forwards;
+}
+
+@keyframes elite-glow-out {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.72);
+  }
+}
+
+@keyframes elite-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: translate(-50%, -50%) scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.05);
+  }
+}
+
 .monster-hit-flash,
 .monster-arrive.monster-hit-flash {
   animation: monster-hit 280ms ease-out;

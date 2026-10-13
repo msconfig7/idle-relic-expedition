@@ -1,7 +1,7 @@
 import { skillTree } from '../content/skillTree'
 import { equippedItems } from './equipment'
 import { scaleModValue } from './items'
-import type { Affix, DerivedStats, Item, ItemMod, PlayerState, StatKey } from './types'
+import { ELITE_SPAWN_CHANCE, type Affix, type DerivedStats, type Item, type ItemMod, type PlayerState, type StatKey } from './types'
 
 function addAffixes(stats: DerivedStats, affixes: Affix[]): void {
   for (const affix of affixes) {
@@ -32,6 +32,7 @@ export function baseStats(level: number): DerivedStats {
     materialDrop: 0.18,
     hpRegen: 0.35,
     lifeSteal: 0,
+    eliteChance: ELITE_SPAWN_CHANCE,
   }
 }
 
@@ -66,6 +67,7 @@ export function deriveStats(player: PlayerState, items: Item[]): DerivedStats {
   stats.materialDrop = Math.min(0.95, Math.max(0, stats.materialDrop))
   stats.hpRegen = Math.max(0, stats.hpRegen)
   stats.lifeSteal = Math.min(0.35, Math.max(0, stats.lifeSteal))
+  stats.eliteChance = Math.min(0.75, Math.max(0, stats.eliteChance))
   return stats
 }
 
@@ -74,7 +76,8 @@ export function formatStat(stat: StatKey, value: number): string {
     stat === 'critChance' ||
     stat === 'block' ||
     stat === 'itemDrop' ||
-    stat === 'materialDrop'
+    stat === 'materialDrop' ||
+    stat === 'eliteChance'
   ) {
     return `${(value * 100).toFixed(1)}%`
   }
