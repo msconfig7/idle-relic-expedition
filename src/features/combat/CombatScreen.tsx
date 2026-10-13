@@ -1,7 +1,6 @@
 import { bossForRealm } from '../../content/bosses'
 import { REALM_PROGRESS_CAP, getRealm, nextRealm } from '../../game'
 import { wardenAwaits } from '../../game/boss'
-import { ELITE_EVERY } from '../../game/types'
 import { DESPAWN_MS } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import type { FloatingHit } from '../../game/types'
@@ -40,7 +39,6 @@ export function CombatScreen() {
     player.realmId < player.highestRealmId ? 'Cleared' : showChallenge ? 'Warden' : `${Math.floor(realmPct)}%`
   const next = nextRealm(player.realmId)
   const readyHunts = player.hunt.contracts.filter((contract) => !contract.claimed && contract.progress >= contract.target).length
-  const eliteIn = combat.monster.elite ? 0 : Math.max(0, ELITE_EVERY - player.hunt.killsTowardElite)
   const bossSeconds = Math.max(0, Math.ceil(combat.bossTimeLeftMs / 1000))
   const bossLimit = boss?.timeLimitMs ?? combat.bossTimeLeftMs
   const bossPct = bossLimit > 0 ? Math.max(0, Math.min(100, (combat.bossTimeLeftMs / bossLimit) * 100)) : 0
@@ -129,8 +127,8 @@ export function CombatScreen() {
               ref={portraitRef}
               src={combat.monster.def.image}
               alt=""
-              className={`h-36 w-36 object-contain drop-shadow-[0_6px_10px_rgba(0,0,0,0.7)] ${
-                combat.monster.elite ? 'rounded-full ring-2 ring-amber-300/80' : ''
+              className={`relative h-36 w-36 object-contain ${
+                combat.monster.elite ? 'elite-portrait' : 'drop-shadow-[0_6px_10px_rgba(0,0,0,0.7)]'
               } ${combat.monster.boss ? 'scale-110' : ''} ${
                 despawning ? 'monster-despawn' : 'monster-arrive'
               }`}
@@ -159,7 +157,6 @@ export function CombatScreen() {
           <p className="truncate text-sm font-semibold">{realm.name}</p>
           <p className="truncate text-[11px]">
             {combat.monster.elite ? `Elite ${combat.monster.def.name}` : combat.monster.def.name}
-            {combat.monster.boss ? '' : combat.monster.elite ? '' : eliteIn === 0 ? ' · elite next' : ` · elite in ${eliteIn}`}
           </p>
         </div>
         <button

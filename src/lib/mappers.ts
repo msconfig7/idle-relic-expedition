@@ -128,6 +128,7 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
     hunt: huntFromUnknown(parsed.hunt) ?? {
       killsTowardElite: 0,
+      suppressElite: false,
       board: 1,
       finalBossCleared: false,
       contracts: [],

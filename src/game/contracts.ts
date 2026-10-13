@@ -1,9 +1,8 @@
 import { essenceName, essencesInRealm } from '../content/essences'
 import { realms } from '../content/realms'
 import { getRealm } from './combat'
-import { ELITE_EVERY } from './types'
 import { hashSeed, mulberry32 } from './rng'
-import type { HuntContract, HuntKind, HuntState, PlayerState, RealmDef } from './types'
+import type { DerivedStats, HuntContract, HuntKind, HuntState, PlayerState, RealmDef } from './types'
 
 export type KillNote = {
   monsterId: string
@@ -49,6 +48,7 @@ export function huntFromUnknown(value: unknown): HuntState | undefined {
   const contracts = Array.isArray(raw.contracts) ? raw.contracts.filter(isContract) : []
   return {
     killsTowardElite: Math.max(0, Math.floor(Number(raw.killsTowardElite ?? 0)) || 0),
+    suppressElite: Boolean(raw.suppressElite),
     board: Math.max(1, Math.floor(Number(raw.board ?? 1)) || 1),
     finalBossCleared: Boolean(raw.finalBossCleared),
     contracts,
@@ -231,8 +231,29 @@ export function withHunt(player: PlayerState, hunt?: HuntState, now = Date.now()
   return { ...player, hunt: next }
 }
 
-export function dueElite(player: PlayerState): boolean {
-  return player.hunt.killsTowardElite >= ELITE_EVERY
+export function suppressNextElite(player: PlayerState): PlayerState {
+  if (player.hunt.suppressElite) return player
+  return { ...player, hunt: { ...player.hunt, suppressElite: true } }
+}
+
+/** Rolls the next non-boss elite. A pending loss clears the flag and forces a normal foe. */
+export function consumeEliteSpawn(
+  player: PlayerState,
+  chance: number,
+  rng: () => number,
+): { player: PlayerState; elite: boolean } {
+  if (player.hunt.suppressElite) {
+    return {
+      elite: false,
+      player: { ...player, hunt: { ...player.hunt, suppressElite: false } },
+    }
+  }
+  const odds = Math.min(1, Math.max(0, chance))
+  return { player, elite: rng() < odds }
+}
+
+export function eliteSpawnChance(stats: Pick<DerivedStats, 'eliteChance'>): number {
+  return Math.min(1, Math.max(0, stats.eliteChance))
 }
 
 export function noteKill(

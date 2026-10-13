@@ -33,6 +33,7 @@ const TIER_VALUES: Record<StatKey, readonly [number, number, number, number, num
   materialDrop: [0.08, 0.05, 0.03, 0.02, 0.01],
   xpMod: [0.12, 0.08, 0.05, 0.03, 0.02],
   goldMod: [0.12, 0.08, 0.05, 0.03, 0.02],
+  eliteChance: [0.04, 0.025, 0.015, 0.01, 0.005],
 }
 
 const TIER_WEIGHT: Record<ModTier, number> = {

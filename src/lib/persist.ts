@@ -27,6 +27,7 @@ function readLocal(): SaveBlob | null {
       queuedMonsterIndex: huntIndex(realm, parsed.player.queuedMonsterIndex ?? monsterIndex),
       hunt: parsed.player.hunt ?? {
         killsTowardElite: 0,
+        suppressElite: false,
         board: 1,
         finalBossCleared: false,
         contracts: [],

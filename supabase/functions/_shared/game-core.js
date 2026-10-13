@@ -354,6 +354,8 @@ var realms = [
 //#endregion
 //#region src/game/types.ts
 var REALM_PROGRESS_CAP = 1e4;
+/** Base chance that the next non-boss fight is an elite. */
+var ELITE_SPAWN_CHANCE = .05;
 var XP_GROWTH = 1.32;
 var EQUIP_SLOTS = [
 	"helmet",
@@ -404,7 +406,8 @@ var STAT_KEYS = [
 	"itemDrop",
 	"materialDrop",
 	"hpRegen",
-	"lifeSteal"
+	"lifeSteal",
+	"eliteChance"
 ];
 var RANK_STAT_BONUS = .08;
 //#endregion
@@ -641,6 +644,7 @@ function huntFromUnknown(value) {
 	const contracts = Array.isArray(raw.contracts) ? raw.contracts.filter(isContract) : [];
 	return {
 		killsTowardElite: Math.max(0, Math.floor(Number(raw.killsTowardElite ?? 0)) || 0),
+		suppressElite: Boolean(raw.suppressElite),
 		board: Math.max(1, Math.floor(Number(raw.board ?? 1)) || 1),
 		finalBossCleared: Boolean(raw.finalBossCleared),
 		contracts,
@@ -838,8 +842,26 @@ function withHunt(player, hunt, now = Date.now()) {
 		hunt: next
 	};
 }
-function dueElite(player) {
-	return player.hunt.killsTowardElite >= 8;
+/** Rolls the next non-boss elite. A pending loss clears the flag and forces a normal foe. */
+function consumeEliteSpawn(player, chance, rng) {
+	if (player.hunt.suppressElite) return {
+		elite: false,
+		player: {
+			...player,
+			hunt: {
+				...player.hunt,
+				suppressElite: false
+			}
+		}
+	};
+	const odds = Math.min(1, Math.max(0, chance));
+	return {
+		player,
+		elite: rng() < odds
+	};
+}
+function eliteSpawnChance(stats) {
+	return Math.min(1, Math.max(0, stats.eliteChance));
 }
 function noteKill(player, note, now = Date.now()) {
 	const ready = withHunt(player, void 0, now);
@@ -878,6 +900,7 @@ function migratePlayer(player) {
 		progressRealmId
 	}, huntFromUnknown(player.hunt) ?? {
 		killsTowardElite: 0,
+		suppressElite: false,
 		board: 1,
 		finalBossCleared: false,
 		contracts: [],
@@ -1237,6 +1260,13 @@ var TIER_VALUES = {
 		.05,
 		.03,
 		.02
+	],
+	eliteChance: [
+		.04,
+		.025,
+		.015,
+		.01,
+		.005
 	]
 };
 var TIER_WEIGHT = {
@@ -1348,7 +1378,7 @@ var SPECIALS = [
 //#endregion
 //#region src/game/format.ts
 function isPercentStat(stat) {
-	return stat === "critChance" || stat === "block" || stat === "itemDrop" || stat === "materialDrop" || stat === "critMulti" || stat === "xpMod" || stat === "goldMod" || stat === "lifeSteal";
+	return stat === "critChance" || stat === "block" || stat === "itemDrop" || stat === "materialDrop" || stat === "eliteChance" || stat === "critMulti" || stat === "xpMod" || stat === "goldMod" || stat === "lifeSteal";
 }
 //#endregion
 //#region src/game/rarity.ts
@@ -2344,7 +2374,8 @@ function baseStats(level) {
 		itemDrop: .08,
 		materialDrop: .18,
 		hpRegen: .35,
-		lifeSteal: 0
+		lifeSteal: 0,
+		eliteChance: ELITE_SPAWN_CHANCE
 	};
 }
 function deriveStats(player, items) {
@@ -2382,6 +2413,7 @@ function deriveStats(player, items) {
 	stats.materialDrop = Math.min(.95, Math.max(0, stats.materialDrop));
 	stats.hpRegen = Math.max(0, stats.hpRegen);
 	stats.lifeSteal = Math.min(.35, Math.max(0, stats.lifeSteal));
+	stats.eliteChance = Math.min(.75, Math.max(0, stats.eliteChance));
 	return stats;
 }
 //#endregion
@@ -2410,7 +2442,8 @@ function settleOffline(player, items, nowMs) {
 	const hunted = pickMonster(getRealm(base.realmId), base.queuedMonsterIndex);
 	const normalMs = timeToKillMs(stats.attack, stats.critChance, stats.critMulti, hunted, 800);
 	const eliteMs = timeToKillMs(stats.attack, stats.critChance, stats.critMulti, eliteScaled(hunted), 800);
-	const cycleMs = (normalMs * 8 + eliteMs) / 9;
+	const eliteOdds = eliteSpawnChance(stats);
+	const cycleMs = normalMs * (1 - eliteOdds) + eliteMs * eliteOdds;
 	const kills = Math.max(0, Math.floor(elapsed / cycleMs * .92));
 	const rng = mulberry32(hashSeed(`${base.id}:${base.lastSettledAt}:${kills}`));
 	let nextPlayer = base;
@@ -2423,7 +2456,9 @@ function settleOffline(player, items, nowMs) {
 	const fulfilledHunts = [];
 	const killSpan = kills > 0 ? elapsed / kills : 0;
 	for (let i = 0; i < kills; i++) {
-		const elite = dueElite(nextPlayer);
+		const rolled = consumeEliteSpawn(nextPlayer, eliteOdds, rng);
+		nextPlayer = rolled.player;
+		const elite = rolled.elite;
 		const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex);
 		const monster = spawnMonster(def, elite);
 		const result = applyKill(nextPlayer, nextItems, monster, deriveStats(nextPlayer, nextItems), rng);
@@ -7957,6 +7992,7 @@ function playerFromRow(row) {
 		queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
 		hunt: huntFromUnknown(parsed.hunt) ?? {
 			killsTowardElite: 0,
+			suppressElite: false,
 			board: 1,
 			finalBossCleared: false,
 			contracts: [],

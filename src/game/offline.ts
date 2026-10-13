@@ -1,8 +1,8 @@
 import { eliteScaled, getRealm, pickMonster, spawnMonster, timeToKillMs } from './combat'
-import { dueElite, noteKill } from './contracts'
+import { consumeEliteSpawn, eliteSpawnChance, noteKill } from './contracts'
 import { migratePlayer } from './migrate'
 import { PLAYER_SWING_MS } from './types'
-import { CONTENT_VERSION, ELITE_EVERY, OFFLINE_CAP_HOURS } from './types'
+import { CONTENT_VERSION, OFFLINE_CAP_HOURS } from './types'
 import { applyKill } from './rewards'
 import { hashSeed, mulberry32 } from './rng'
 import { deriveStats } from './stats'
@@ -36,7 +36,8 @@ export function settleOffline(
   const hunted = pickMonster(getRealm(base.realmId), base.queuedMonsterIndex)
   const normalMs = timeToKillMs(stats.attack, stats.critChance, stats.critMulti, hunted, PLAYER_SWING_MS)
   const eliteMs = timeToKillMs(stats.attack, stats.critChance, stats.critMulti, eliteScaled(hunted), PLAYER_SWING_MS)
-  const cycleMs = (normalMs * ELITE_EVERY + eliteMs) / (ELITE_EVERY + 1)
+  const eliteOdds = eliteSpawnChance(stats)
+  const cycleMs = normalMs * (1 - eliteOdds) + eliteMs * eliteOdds
   const kills = Math.max(0, Math.floor((elapsed / cycleMs) * 0.92))
   const rng = mulberry32(hashSeed(`${base.id}:${base.lastSettledAt}:${kills}`))
 
@@ -51,7 +52,9 @@ export function settleOffline(
 
   const killSpan = kills > 0 ? elapsed / kills : 0
   for (let i = 0; i < kills; i++) {
-    const elite = dueElite(nextPlayer)
+    const rolled = consumeEliteSpawn(nextPlayer, eliteOdds, rng)
+    nextPlayer = rolled.player
+    const elite = rolled.elite
     const def = pickMonster(getRealm(nextPlayer.realmId), nextPlayer.queuedMonsterIndex)
     const monster = spawnMonster(def, elite)
     const result = applyKill(nextPlayer, nextItems, monster, deriveStats(nextPlayer, nextItems), rng)

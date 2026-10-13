@@ -19,6 +19,7 @@ export function createPlayer(id: string, now = Date.now()): PlayerState {
     queuedMonsterIndex: 0,
     hunt: {
       killsTowardElite: 0,
+      suppressElite: false,
       board: 1,
       finalBossCleared: false,
       contracts: [],
