@@ -122,13 +122,6 @@ export function CombatScreen() {
             </div>
           )}
           <div className="relative mx-auto mt-6 grid h-36 place-items-center">
-            {combat.monster.elite && (
-              <span
-                className={`elite-glow ${despawning ? 'elite-glow-out' : ''}`}
-                style={despawning ? { animationDuration: `${DESPAWN_MS}ms` } : undefined}
-                aria-hidden
-              />
-            )}
             <img
               key={combat.encounter}
               ref={portraitRef}
