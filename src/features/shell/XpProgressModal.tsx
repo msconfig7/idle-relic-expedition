@@ -4,7 +4,6 @@ import {
   etaToNextMs,
   formatLevelEta,
   formatXpRate,
-  killXp,
   projectedXpPerMinute,
 } from '../../game/xpForecast'
 import { useGameStore } from '../../state/gameStore'
@@ -26,8 +25,6 @@ type PaceView = {
   xpPerMinute: number
   live: boolean
   eta: number | null
-  monsterName: string | null
-  perKill: number
 }
 
 let paceReadings: number[] = []
@@ -46,7 +43,6 @@ function capturePace(now: number): PaceView {
   const pct = need > 0 ? Math.min(100, (into / need) * 100) : 100
   const atCap = level >= LEVEL_CAP
   const monster = combat?.monster.def ?? null
-  const perKill = monster && stats ? killXp(monster.xp, stats.xpMod) : 0
   const projected =
     monster && stats
       ? projectedXpPerMinute({
@@ -77,8 +73,6 @@ function capturePace(now: number): PaceView {
     xpPerMinute,
     live,
     eta: atCap ? null : etaToNextMs(remaining, xpPerMinute),
-    monsterName: monster?.name ?? null,
-    perKill,
   }
 }
 
@@ -114,7 +108,7 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const { level, into, need, remaining, pct, atCap, xpPerMinute, live, eta, monsterName, perKill } = pace
+  const { level, into, need, remaining, pct, atCap, xpPerMinute, live, eta } = pace
   const pctLabel = pct >= 100 ? '100%' : `${pct.toFixed(1)}%`
 
   return (
@@ -169,18 +163,6 @@ export function XpProgressModal({ onClose }: { onClose: () => void }) {
             </p>
           </article>
         </div>
-
-        <p className="text-xs leading-5 text-stone-500">
-          {atCap
-            ? 'This is the highest level.'
-            : live
-              ? xpPerMinute > 0
-                ? 'Average XP over the last minute of combat. Updates every 5 seconds.'
-                : 'No XP gained in the last minute, so a level-up time is not available yet.'
-              : monsterName
-                ? `${monsterName} awards ${perKill.toLocaleString()} XP. This average updates every 5 seconds.`
-                : 'Start a fight to estimate when you will level up.'}
-        </p>
       </div>
     </Modal>
   )

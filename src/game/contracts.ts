@@ -1,7 +1,8 @@
 import { essenceName, essencesInRealm } from '../content/essences'
+import { realms } from '../content/realms'
 import { getRealm } from './combat'
 import { hashSeed, mulberry32 } from './rng'
-import type { DerivedStats, HuntContract, HuntKind, HuntState, PlayerState } from './types'
+import type { DerivedStats, HuntContract, HuntKind, HuntState, PlayerState, RealmDef } from './types'
 
 export type KillNote = {
   monsterId: string
@@ -68,10 +69,17 @@ function quarryNumbers(realmId: number, kind: HuntKind): { target: number; gold:
   return { target: 48 + realmId * 20, gold: 260 * realmId, scrap: 12 * realmId, essence: 6 }
 }
 
-function quarryDetail(contract: Pick<HuntContract, 'kind' | 'title'>, target: number): string {
-  if (contract.kind === 'elite') return `Slay ${target} elites`
+function quarryDetail(contract: Pick<HuntContract, 'kind' | 'title' | 'realmId'>, target: number): string {
+  const realmName = getRealm(contract.realmId).name
+  if (contract.kind === 'elite') return `Slay ${target} elites in ${realmName}`
   if (contract.kind === 'realm') return `Slay ${target} foes in ${contract.title}`
-  return `Slay ${target} ${contract.title}`
+  return `Slay ${target} ${contract.title} in ${realmName}`
+}
+
+function enabledRealms(highestRealmId: number): RealmDef[] {
+  const cap = Math.max(1, Math.floor(highestRealmId) || 1)
+  const open = realms.filter((realm) => realm.id <= cap)
+  return open.length > 0 ? open : realms.slice(0, 1)
 }
 
 function scaleOpenContract(contract: HuntContract): HuntContract {
@@ -111,72 +119,78 @@ function scaleOpenContracts(hunt: HuntState): HuntState {
   return changed ? { ...hunt, contracts } : hunt
 }
 
-export function rollBoard(playerId: string, realmId: number, board: number): HuntContract[] {
-  const realm = getRealm(realmId)
-  const rng = mulberry32(hashSeed(`${playerId}:hunts:${board}`))
-  const monsters = realm.monsters
-  const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0]
+function rollKind(kind: HuntKind, realm: RealmDef, board: number, rng: () => number): HuntContract {
+  const numbers = quarryNumbers(realm.id, kind)
   const essencePool = essencesInRealm(realm.id)
   const essenceFor = (fallback: string) => essencePool[pickIndex(rng, essencePool.length)]?.id ?? fallback
-  const monsterNumbers = quarryNumbers(realm.id, 'monster')
-  const eliteNumbers = quarryNumbers(realm.id, 'elite')
-  const realmNumbers = quarryNumbers(realm.id, 'realm')
-  const monsterEssence = monster?.id ?? essenceFor('dust-mite')
-  const eliteEssence = essenceFor(monsterEssence)
-  const realmEssence = essenceFor(monsterEssence)
 
-  const slay: HuntContract = {
-    id: `${board}:monster`,
-    kind: 'monster',
-    title: monster?.name ?? 'Foes',
-    detail: quarryDetail({ kind: 'monster', title: monster?.name ?? 'Foes' }, monsterNumbers.target),
-    monsterId: monster?.id ?? null,
-    realmId: realm.id,
-    target: monsterNumbers.target,
-    progress: 0,
-    claimed: false,
-    reward: {
-      gold: monsterNumbers.gold,
-      scrap: monsterNumbers.scrap,
-      essenceId: monsterEssence,
-      essence: monsterNumbers.essence,
-    },
+  if (kind === 'monster') {
+    const monsters = realm.monsters
+    const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0]
+    const title = monster?.name ?? 'Foes'
+    return {
+      id: `${board}:monster`,
+      kind,
+      title,
+      detail: quarryDetail({ kind, title, realmId: realm.id }, numbers.target),
+      monsterId: monster?.id ?? null,
+      realmId: realm.id,
+      target: numbers.target,
+      progress: 0,
+      claimed: false,
+      reward: {
+        gold: numbers.gold,
+        scrap: numbers.scrap,
+        essenceId: monster?.id ?? essenceFor('dust-mite'),
+        essence: numbers.essence,
+      },
+    }
   }
-  const elites: HuntContract = {
-    id: `${board}:elite`,
-    kind: 'elite',
-    title: 'Elites',
-    detail: quarryDetail({ kind: 'elite', title: 'Elites' }, eliteNumbers.target),
-    monsterId: null,
-    realmId: realm.id,
-    target: eliteNumbers.target,
-    progress: 0,
-    claimed: false,
-    reward: {
-      gold: eliteNumbers.gold,
-      scrap: eliteNumbers.scrap,
-      essenceId: eliteEssence,
-      essence: eliteNumbers.essence,
-    },
+
+  if (kind === 'elite') {
+    return {
+      id: `${board}:elite`,
+      kind,
+      title: 'Elites',
+      detail: quarryDetail({ kind, title: 'Elites', realmId: realm.id }, numbers.target),
+      monsterId: null,
+      realmId: realm.id,
+      target: numbers.target,
+      progress: 0,
+      claimed: false,
+      reward: {
+        gold: numbers.gold,
+        scrap: numbers.scrap,
+        essenceId: essenceFor(realm.monsters[0]?.id ?? 'dust-mite'),
+        essence: numbers.essence,
+      },
+    }
   }
-  const sweep: HuntContract = {
+
+  return {
     id: `${board}:realm`,
     kind: 'realm',
     title: realm.name,
-    detail: quarryDetail({ kind: 'realm', title: realm.name }, realmNumbers.target),
+    detail: quarryDetail({ kind: 'realm', title: realm.name, realmId: realm.id }, numbers.target),
     monsterId: null,
     realmId: realm.id,
-    target: realmNumbers.target,
+    target: numbers.target,
     progress: 0,
     claimed: false,
     reward: {
-      gold: realmNumbers.gold,
-      scrap: realmNumbers.scrap,
-      essenceId: realmEssence,
-      essence: realmNumbers.essence,
+      gold: numbers.gold,
+      scrap: numbers.scrap,
+      essenceId: essenceFor(realm.monsters[0]?.id ?? 'dust-mite'),
+      essence: numbers.essence,
     },
   }
-  return [slay, elites, sweep]
+}
+
+export function rollBoard(playerId: string, highestRealmId: number, board: number): HuntContract[] {
+  const pool = enabledRealms(highestRealmId)
+  const rng = mulberry32(hashSeed(`${playerId}:hunts:${board}`))
+  const pickRealm = () => pool[pickIndex(rng, pool.length)] ?? pool[0]
+  return (['monster', 'elite', 'realm'] as const).map((kind) => rollKind(kind, pickRealm(), board, rng))
 }
 
 function boardCooling(hunt: HuntState, now: number): boolean {
@@ -196,7 +210,7 @@ function resolveBoard(player: PlayerState, hunt: HuntState, now: number): HuntSt
       nextBoardAt: null,
       diamondRewardBoard: null,
       unconfirmedSealBoard: null,
-      contracts: rollBoard(player.id, player.realmId, board),
+      contracts: rollBoard(player.id, player.highestRealmId ?? player.realmId, board),
     }
   }
   if (scaled.contracts.length === 3) return scaled
@@ -206,7 +220,7 @@ function resolveBoard(player: PlayerState, hunt: HuntState, now: number): HuntSt
     ...scaled,
     board,
     nextBoardAt: null,
-    contracts: rollBoard(player.id, player.realmId, board),
+    contracts: rollBoard(player.id, player.highestRealmId ?? player.realmId, board),
   }
 }
 
@@ -255,7 +269,7 @@ export function noteKill(
     if (contract.claimed || contract.progress >= contract.target) return contract
     const counts =
       (contract.kind === 'monster' && contract.monsterId === note.monsterId) ||
-      (contract.kind === 'elite' && note.elite) ||
+      (contract.kind === 'elite' && note.elite && contract.realmId === note.realmId) ||
       (contract.kind === 'realm' && contract.realmId === note.realmId)
     if (!counts) return contract
     const progress = Math.min(contract.target, contract.progress + 1)

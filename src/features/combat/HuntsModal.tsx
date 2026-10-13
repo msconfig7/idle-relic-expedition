@@ -35,10 +35,6 @@ export function HuntsModal({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="Hunt board" onClose={onClose}>
-      <p className="text-[11px] leading-4 text-stone-400">
-        Three quarries. Fill a slip, then press the seal to take the reward. When every slip is sealed, claim{' '}
-        {HUNT_SEAL_DIAMONDS} diamonds on their own. New hunts are posted two hours later.
-      </p>
       {waiting && nextBoardAt != null && (
         <p className="mt-2 rounded-lg border border-stone-700 bg-stone-950 px-3 py-2 text-sm tabular-nums text-stone-200">
           New hunts in {formatWait(nextBoardAt - now)}
