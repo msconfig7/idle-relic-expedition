@@ -1,6 +1,6 @@
 import type { EquipSlot, SlotType } from '../../game/types'
 
-const v = '?v=3'
+const v = '?v=4'
 
 export const SLOT_ICON: Record<SlotType, string> = {
   helmet: `/equipment/helmet.png${v}`,
