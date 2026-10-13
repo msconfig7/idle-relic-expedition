@@ -674,9 +674,15 @@ function quarryNumbers(realmId, kind) {
 	};
 }
 function quarryDetail(contract, target) {
-	if (contract.kind === "elite") return `Slay ${target} elites`;
+	const realmName = getRealm(contract.realmId).name;
+	if (contract.kind === "elite") return `Slay ${target} elites in ${realmName}`;
 	if (contract.kind === "realm") return `Slay ${target} foes in ${contract.title}`;
-	return `Slay ${target} ${contract.title}`;
+	return `Slay ${target} ${contract.title} in ${realmName}`;
+}
+function enabledRealms(highestRealmId) {
+	const cap = Math.max(1, Math.floor(highestRealmId) || 1);
+	const open = realms.filter((realm) => realm.id <= cap);
+	return open.length > 0 ? open : realms.slice(0, 1);
 }
 function scaleOpenContract(contract) {
 	if (contract.claimed) return contract;
@@ -708,81 +714,88 @@ function scaleOpenContracts(hunt) {
 		contracts
 	} : hunt;
 }
-function rollBoard(playerId, realmId, board) {
-	const realm = getRealm(realmId);
-	const rng = mulberry32(hashSeed(`${playerId}:hunts:${board}`));
-	const monsters = realm.monsters;
-	const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0];
+function rollKind(kind, realm, board, rng) {
+	const numbers = quarryNumbers(realm.id, kind);
 	const essencePool = essencesInRealm(realm.id);
 	const essenceFor = (fallback) => essencePool[pickIndex(rng, essencePool.length)]?.id ?? fallback;
-	const monsterNumbers = quarryNumbers(realm.id, "monster");
-	const eliteNumbers = quarryNumbers(realm.id, "elite");
-	const realmNumbers = quarryNumbers(realm.id, "realm");
-	const monsterEssence = monster?.id ?? essenceFor("dust-mite");
-	const eliteEssence = essenceFor(monsterEssence);
-	const realmEssence = essenceFor(monsterEssence);
-	return [
-		{
+	if (kind === "monster") {
+		const monsters = realm.monsters;
+		const monster = monsters[pickIndex(rng, monsters.length)] ?? monsters[0];
+		const title = monster?.name ?? "Foes";
+		return {
 			id: `${board}:monster`,
-			kind: "monster",
-			title: monster?.name ?? "Foes",
+			kind,
+			title,
 			detail: quarryDetail({
-				kind: "monster",
-				title: monster?.name ?? "Foes"
-			}, monsterNumbers.target),
+				kind,
+				title,
+				realmId: realm.id
+			}, numbers.target),
 			monsterId: monster?.id ?? null,
 			realmId: realm.id,
-			target: monsterNumbers.target,
+			target: numbers.target,
 			progress: 0,
 			claimed: false,
 			reward: {
-				gold: monsterNumbers.gold,
-				scrap: monsterNumbers.scrap,
-				essenceId: monsterEssence,
-				essence: monsterNumbers.essence
+				gold: numbers.gold,
+				scrap: numbers.scrap,
+				essenceId: monster?.id ?? essenceFor("dust-mite"),
+				essence: numbers.essence
 			}
-		},
-		{
-			id: `${board}:elite`,
-			kind: "elite",
+		};
+	}
+	if (kind === "elite") return {
+		id: `${board}:elite`,
+		kind,
+		title: "Elites",
+		detail: quarryDetail({
+			kind,
 			title: "Elites",
-			detail: quarryDetail({
-				kind: "elite",
-				title: "Elites"
-			}, eliteNumbers.target),
-			monsterId: null,
-			realmId: realm.id,
-			target: eliteNumbers.target,
-			progress: 0,
-			claimed: false,
-			reward: {
-				gold: eliteNumbers.gold,
-				scrap: eliteNumbers.scrap,
-				essenceId: eliteEssence,
-				essence: eliteNumbers.essence
-			}
-		},
-		{
-			id: `${board}:realm`,
+			realmId: realm.id
+		}, numbers.target),
+		monsterId: null,
+		realmId: realm.id,
+		target: numbers.target,
+		progress: 0,
+		claimed: false,
+		reward: {
+			gold: numbers.gold,
+			scrap: numbers.scrap,
+			essenceId: essenceFor(realm.monsters[0]?.id ?? "dust-mite"),
+			essence: numbers.essence
+		}
+	};
+	return {
+		id: `${board}:realm`,
+		kind: "realm",
+		title: realm.name,
+		detail: quarryDetail({
 			kind: "realm",
 			title: realm.name,
-			detail: quarryDetail({
-				kind: "realm",
-				title: realm.name
-			}, realmNumbers.target),
-			monsterId: null,
-			realmId: realm.id,
-			target: realmNumbers.target,
-			progress: 0,
-			claimed: false,
-			reward: {
-				gold: realmNumbers.gold,
-				scrap: realmNumbers.scrap,
-				essenceId: realmEssence,
-				essence: realmNumbers.essence
-			}
+			realmId: realm.id
+		}, numbers.target),
+		monsterId: null,
+		realmId: realm.id,
+		target: numbers.target,
+		progress: 0,
+		claimed: false,
+		reward: {
+			gold: numbers.gold,
+			scrap: numbers.scrap,
+			essenceId: essenceFor(realm.monsters[0]?.id ?? "dust-mite"),
+			essence: numbers.essence
 		}
-	];
+	};
+}
+function rollBoard(playerId, highestRealmId, board) {
+	const pool = enabledRealms(highestRealmId);
+	const rng = mulberry32(hashSeed(`${playerId}:hunts:${board}`));
+	const pickRealm = () => pool[pickIndex(rng, pool.length)] ?? pool[0];
+	return [
+		"monster",
+		"elite",
+		"realm"
+	].map((kind) => rollKind(kind, pickRealm(), board, rng));
 }
 function boardCooling(hunt, now) {
 	return hunt.nextBoardAt != null && now < hunt.nextBoardAt;
@@ -800,7 +813,7 @@ function resolveBoard(player, hunt, now) {
 			nextBoardAt: null,
 			diamondRewardBoard: null,
 			unconfirmedSealBoard: null,
-			contracts: rollBoard(player.id, player.realmId, board)
+			contracts: rollBoard(player.id, player.highestRealmId ?? player.realmId, board)
 		};
 	}
 	if (scaled.contracts.length === 3) return scaled;
@@ -810,7 +823,7 @@ function resolveBoard(player, hunt, now) {
 		...scaled,
 		board,
 		nextBoardAt: null,
-		contracts: rollBoard(player.id, player.realmId, board)
+		contracts: rollBoard(player.id, player.highestRealmId ?? player.realmId, board)
 	};
 }
 function withHunt(player, hunt, now = Date.now()) {
@@ -835,7 +848,7 @@ function noteKill(player, note, now = Date.now()) {
 	const fulfilled = [];
 	const contracts = hunt.contracts.map((contract) => {
 		if (contract.claimed || contract.progress >= contract.target) return contract;
-		if (!(contract.kind === "monster" && contract.monsterId === note.monsterId || contract.kind === "elite" && note.elite || contract.kind === "realm" && contract.realmId === note.realmId)) return contract;
+		if (!(contract.kind === "monster" && contract.monsterId === note.monsterId || contract.kind === "elite" && note.elite && contract.realmId === note.realmId || contract.kind === "realm" && contract.realmId === note.realmId)) return contract;
 		const progress = Math.min(contract.target, contract.progress + 1);
 		const next = {
 			...contract,
