@@ -5,7 +5,7 @@ import type { Item } from '../../game/types'
 import { useGameStore } from '../../state/gameStore'
 import { ForgeModal } from '../craft/ForgeModal'
 import { ItemCard, slotLabel } from '../items/ItemCard'
-import { SLOT_ICON, slotIconForEquip } from '../items/slotIcons'
+import { itemIcon, slotIconForEquip } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
 import { useEffect, useRef, useState } from 'react'
 import type { StatKey } from '../../game/types'
@@ -154,7 +154,7 @@ function EquipSlotTile({
   selected: boolean
   onSelect: () => void
 }) {
-  const icon = filled ? SLOT_ICON[filled.slotType] : slotIconForEquip(slot)
+  const icon = filled ? itemIcon(filled) : slotIconForEquip(slot)
   return (
     <button
       type="button"

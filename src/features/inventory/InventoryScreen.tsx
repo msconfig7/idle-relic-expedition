@@ -19,7 +19,7 @@ import { useGameStore } from '../../state/gameStore'
 import { ForgeModal } from '../craft/ForgeModal'
 import { ItemCard, slotLabel } from '../items/ItemCard'
 import { SwapCompare } from '../items/SwapCompare'
-import { SLOT_ICON, TYPE_LABEL } from '../items/slotIcons'
+import { itemIcon, itemKindLabel, TYPE_LABEL } from '../items/slotIcons'
 import { Modal } from '../ui/Modal'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -327,9 +327,9 @@ export function InventoryScreen() {
                   New
                 </span>
               ) : null}
-              <img src={SLOT_ICON[item.slotType]} alt="" className="h-14 w-full object-contain" draggable={false} />
+              <img src={itemIcon(item)} alt="" className="h-14 w-full object-contain" draggable={false} />
               <span className="mt-1 line-clamp-2 text-[10px] leading-tight text-stone-100">{item.name}</span>
-              <span className="text-[9px] uppercase tracking-wide">{TYPE_LABEL[item.slotType]}</span>
+              <span className="text-[9px] uppercase tracking-wide">{itemKindLabel(item)}</span>
             </button>
             )
           })}
