@@ -14,6 +14,7 @@ export const PLAYER_SWING_MS = 800
 export const MONSTER_SWING_MS = 1_150
 export const DEATH_COOLDOWN_MS = 5_000
 export const DESPAWN_MS = 700
+/** Starting bag capacity. Later levels add slots; see `bagCapacity`. */
 export const MAX_INVENTORY = 30
 
 export const EQUIP_SLOTS = [
@@ -160,6 +161,8 @@ export type PlayerState = {
   hunt: HuntState
   skillPointsUnspent: number
   allocatedNodeIds: number[]
+  /** 1–10. Level 1 is the starting bag; each level adds 5 slots. */
+  bagLevel: number
   lastSettledAt: number
   contentVersion: number
 }

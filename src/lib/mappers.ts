@@ -52,6 +52,7 @@ export const playerSchema = z.object({
   queuedMonsterIndex: z.number().int().nonnegative().optional(),
   skillPointsUnspent: z.number().int().nonnegative(),
   allocatedNodeIds: z.array(z.number().int()),
+  bagLevel: z.number().int().min(1).max(10).optional(),
   lastSettledAt: z.number(),
   contentVersion: z.number().int(),
 })
@@ -72,6 +73,7 @@ export type PlayerRow = {
   queued_monster_index?: number
   skill_points_unspent: number
   allocated_node_ids: number[]
+  bag_level?: number
   highest_realm_id?: number
   last_settled_at: string
   content_version: number
@@ -114,6 +116,7 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
     skillPointsUnspent: row.skill_points_unspent,
     allocatedNodeIds: row.allocated_node_ids ?? [],
+    bagLevel: row.bag_level,
     lastSettledAt: new Date(row.last_settled_at).getTime(),
     contentVersion: row.content_version,
   })
@@ -126,6 +129,7 @@ export function playerFromRow(row: PlayerRow): PlayerState {
     progressRealmId: parsed.progressRealmId ?? parsed.realmId,
     monsterIndex,
     queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
+    bagLevel: parsed.bagLevel ?? 1,
     hunt: huntFromUnknown(parsed.hunt) ?? {
       killsTowardElite: 0,
       suppressElite: false,
@@ -157,6 +161,7 @@ export function playerToRow(player: PlayerState): PlayerRow {
     queued_monster_index: player.queuedMonsterIndex,
     skill_points_unspent: player.skillPointsUnspent,
     allocated_node_ids: player.allocatedNodeIds,
+    bag_level: player.bagLevel,
     last_settled_at: new Date(player.lastSettledAt).toISOString(),
     content_version: player.contentVersion,
   }

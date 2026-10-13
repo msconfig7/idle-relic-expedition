@@ -3,7 +3,8 @@ import { getRealm } from './combat'
 import { rollItemDrop, rollScrap } from './drops'
 import { grantXp } from './xp'
 import type { DerivedStats, EssenceCounts, Item, KillReward, LiveMonster, PlayerState } from './types'
-import { MAX_INVENTORY, REALM_PROGRESS_CAP } from './types'
+import { bagCapacity } from './bag'
+import { REALM_PROGRESS_CAP } from './types'
 
 export function applyKill(
   player: PlayerState,
@@ -24,7 +25,7 @@ export function applyKill(
   const itemChance = monster.boss ? 1 : monster.def.itemDrop * (stats.itemDrop / 0.08)
   const bagCount = items.filter((entry) => !entry.equippedSlot).length
   const item =
-    bagCount >= MAX_INVENTORY ? null : rollItemDrop(rng, player.id, player.realmId, itemChance)
+    bagCount >= bagCapacity(player.bagLevel) ? null : rollItemDrop(rng, player.id, player.realmId, itemChance)
   const leveled = grantXp(player.xp, player.level, player.skillPointsUnspent, xpGain)
   const nextItems = item ? [...items, item] : items
   const tracking =

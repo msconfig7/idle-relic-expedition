@@ -891,13 +891,22 @@ function noteKill(player, note, now = Date.now()) {
 		fulfilled
 	};
 }
+function clampBagLevel(level) {
+	if (level == null || !Number.isFinite(level)) return 1;
+	return Math.min(10, Math.max(1, Math.floor(level)));
+}
+function bagCapacity(level) {
+	return 30 + (clampBagLevel(level) - 1) * 5;
+}
 //#endregion
 //#region src/game/migrate.ts
 function migratePlayer(player) {
 	const progressRealmId = player.progressRealmId || player.realmId;
+	const bagLevel = clampBagLevel(player.bagLevel);
 	const seeded = withHunt({
 		...player,
-		progressRealmId
+		progressRealmId,
+		bagLevel
 	}, huntFromUnknown(player.hunt) ?? {
 		killsTowardElite: 0,
 		suppressElite: false,
@@ -1721,7 +1730,7 @@ function applyKill(player, items, monster, stats, rng) {
 		[essenceId]: (currentEssences[essenceId] ?? 0) + 1
 	} : currentEssences;
 	const itemChance = monster.boss ? 1 : monster.def.itemDrop * (stats.itemDrop / .08);
-	const item = items.filter((entry) => !entry.equippedSlot).length >= 30 ? null : rollItemDrop(rng, player.id, player.realmId, itemChance);
+	const item = items.filter((entry) => !entry.equippedSlot).length >= bagCapacity(player.bagLevel) ? null : rollItemDrop(rng, player.id, player.realmId, itemChance);
 	const leveled = grantXp(player.xp, player.level, player.skillPointsUnspent, xpGain);
 	const nextItems = item ? [...items, item] : items;
 	const nextProgress = player.realmId === player.highestRealmId && player.progressRealmId === player.realmId && !monster.boss ? Math.min(REALM_PROGRESS_CAP, player.realmProgress + monster.def.progress) : player.realmProgress;
@@ -7957,6 +7966,7 @@ var playerSchema = object({
 	queuedMonsterIndex: number().int().nonnegative().optional(),
 	skillPointsUnspent: number().int().nonnegative(),
 	allocatedNodeIds: array(number().int()),
+	bagLevel: number().int().min(1).max(10).optional(),
 	lastSettledAt: number(),
 	contentVersion: number().int()
 });
@@ -7978,6 +7988,7 @@ function playerFromRow(row) {
 		queuedMonsterIndex: row.queued_monster_index ?? row.monster_index ?? 0,
 		skillPointsUnspent: row.skill_points_unspent,
 		allocatedNodeIds: row.allocated_node_ids ?? [],
+		bagLevel: row.bag_level,
 		lastSettledAt: new Date(row.last_settled_at).getTime(),
 		contentVersion: row.content_version
 	});
@@ -7990,6 +8001,7 @@ function playerFromRow(row) {
 		progressRealmId: parsed.progressRealmId ?? parsed.realmId,
 		monsterIndex,
 		queuedMonsterIndex: huntIndex(realm, parsed.queuedMonsterIndex ?? monsterIndex),
+		bagLevel: parsed.bagLevel ?? 1,
 		hunt: huntFromUnknown(parsed.hunt) ?? {
 			killsTowardElite: 0,
 			suppressElite: false,
@@ -8020,6 +8032,7 @@ function playerToRow(player) {
 		queued_monster_index: player.queuedMonsterIndex,
 		skill_points_unspent: player.skillPointsUnspent,
 		allocated_node_ids: player.allocatedNodeIds,
+		bag_level: player.bagLevel,
 		last_settled_at: new Date(player.lastSettledAt).toISOString(),
 		content_version: player.contentVersion
 	};
