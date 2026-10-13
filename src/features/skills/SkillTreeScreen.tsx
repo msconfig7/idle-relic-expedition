@@ -8,7 +8,7 @@ import {
   useTransformComponent,
   type ReactZoomPanPinchRef,
 } from 'react-zoom-pan-pinch'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ClusterId, NodeKind, SkillNode } from '../../game/types'
 
 const clusterStroke: Record<string, string> = {
@@ -168,31 +168,69 @@ function Plate({
   return <circle cx={cx} cy={cy} r={r} fill={fill} opacity={0.9} />
 }
 
-function BonusDetails({ node, status }: { node: SkillNode; status: string | null }) {
-  return (
-    <>
-      <p className="truncate font-medium text-amber-100" title={node.name}>
-        {node.name}
-      </p>
-      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-stone-500">
-        {kindLabel[node.kind]} · {clusterLabel[node.cluster]}
-        {status ? ` · ${status}` : ''}
-      </p>
-      <ul className="mt-1.5 space-y-0.5 text-xs leading-4">
-        {node.bonuses.map((bonus, index) => (
-          <li key={`${bonus.stat}-${index}`} className={bonus.value < 0 ? 'text-red-300' : 'text-stone-200'}>
-            {formatAffix(bonus)}
-          </li>
-        ))}
-      </ul>
-    </>
-  )
+function regionActionClass(tone: 'take' | 'refund' | 'ghost') {
+  if (tone === 'take') return 'bg-amber-700 text-amber-50'
+  if (tone === 'refund') return 'border border-red-900 text-red-200'
+  return 'border border-stone-600 text-stone-200'
 }
 
-function cardFrame(selected: boolean) {
-  return `rounded-xl border border-stone-700 border-l-4 bg-stone-950 p-2.5 text-left ${
-    selected ? 'ring-2 ring-amber-400' : ''
-  }`
+function SkillRegion({
+  node,
+  status,
+  selected,
+  onOpen,
+  action,
+  columns,
+  className,
+  regionRef,
+}: {
+  node: SkillNode
+  status: string | null
+  selected: boolean
+  onOpen?: () => void
+  action?: ReactNode
+  columns?: boolean
+  className?: string
+  regionRef?: (el: HTMLDivElement | null) => void
+}) {
+  const meta = `${kindLabel[node.kind]} · ${clusterLabel[node.cluster]}${status ? ` · ${status}` : ''}`
+  return (
+    <div
+      ref={regionRef}
+      className={`relative rounded-lg border border-stone-700 border-l-4 bg-stone-950 px-2 py-1.5 text-left ${
+        selected ? 'ring-2 ring-amber-400' : ''
+      } ${className ?? ''}`}
+      style={{ borderLeftColor: clusterStroke[node.cluster] }}
+    >
+      {onOpen && (
+        <button
+          type="button"
+          aria-label={node.name}
+          aria-pressed={selected}
+          className="absolute inset-0 rounded-[inherit] bg-transparent"
+          onClick={onOpen}
+        />
+      )}
+      <div className={`relative ${onOpen ? 'pointer-events-none' : ''}`}>
+        <p className="truncate text-sm font-medium leading-tight text-amber-100" title={node.name}>
+          {node.name}
+        </p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <p className="min-w-0 flex-1 truncate text-[10px] uppercase leading-3 tracking-wide text-stone-500">
+            {meta}
+          </p>
+          {action && <div className="pointer-events-auto">{action}</div>}
+        </div>
+        <ul className={`mt-1 text-[11px] leading-[14px] ${columns ? 'grid grid-cols-2 gap-x-3' : ''}`}>
+          {node.bonuses.map((bonus, index) => (
+            <li key={`${bonus.stat}-${index}`} className={bonus.value < 0 ? 'text-red-300' : 'text-stone-200'}>
+              {formatAffix(bonus)}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  )
 }
 
 export function SkillTreeScreen() {
@@ -407,69 +445,69 @@ export function SkillTreeScreen() {
       </div>
       <div className="shrink-0">
         {viewed && !viewedInNext && (
-          <div className={cardFrame(true)} style={{ borderLeftColor: clusterStroke[viewed.cluster] }}>
-            <BonusDetails node={viewed} status={nodeStatus(viewed.id)} />
-            {pending.has(viewed.id) && (
-              <button
-                type="button"
-                className="mt-2 w-full rounded-lg border border-stone-600 py-1.5 text-xs text-stone-200"
-                onClick={() => queueNode(viewed.id)}
-              >
-                Undo
-              </button>
-            )}
-            {allocated.has(viewed.id) && viewed.id !== START_NODE_ID && (
-              <button
-                type="button"
-                className="mt-2 w-full rounded-lg border border-red-900 py-1.5 text-xs text-red-200"
-                onClick={() => queueNode(viewed.id)}
-              >
-                {pendingRemoval.has(viewed.id) ? 'Restore' : 'Refund'}
-              </button>
-            )}
-          </div>
+          <SkillRegion
+            node={viewed}
+            status={nodeStatus(viewed.id)}
+            selected
+            columns={viewed.bonuses.length > 2}
+            action={
+              pending.has(viewed.id) ? (
+                <button
+                  type="button"
+                  className={`shrink-0 rounded-md px-2.5 text-[11px] font-medium leading-none min-h-7 ${regionActionClass('ghost')}`}
+                  onClick={() => queueNode(viewed.id)}
+                >
+                  Undo
+                </button>
+              ) : allocated.has(viewed.id) && viewed.id !== START_NODE_ID ? (
+                <button
+                  type="button"
+                  className={`shrink-0 rounded-md px-2.5 text-[11px] font-medium leading-none min-h-7 ${regionActionClass('refund')}`}
+                  onClick={() => queueNode(viewed.id)}
+                >
+                  {pendingRemoval.has(viewed.id) ? 'Restore' : 'Refund'}
+                </button>
+              ) : null
+            }
+          />
         )}
-        <p className={`mb-1 text-[11px] uppercase tracking-wide text-stone-500 ${viewed && !viewedInNext ? 'mt-2' : ''}`}>
+        <p className={`mb-0.5 text-[10px] uppercase tracking-wide text-stone-500 ${viewed && !viewedInNext ? 'mt-1.5' : ''}`}>
           Next
         </p>
         {nextNodes.length === 0 ? (
           <p className="text-xs text-stone-500">No open nodes from here.</p>
         ) : (
-          <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:thin]">
+          <div className="flex gap-1.5 overflow-x-auto overscroll-x-contain pb-0.5 [scrollbar-width:thin]">
             {nextNodes.map((node) => (
-              <div
+              <SkillRegion
                 key={node.id}
-                ref={(el) => {
+                className="w-[11.25rem] shrink-0"
+                regionRef={(el) => {
                   if (el) cardRefs.current.set(node.id, el)
                   else cardRefs.current.delete(node.id)
                 }}
-                className={`w-[11.25rem] shrink-0 ${cardFrame(viewId === node.id)}`}
-                style={{ borderLeftColor: clusterStroke[node.cluster] }}
-              >
-                <button
-                  type="button"
-                  aria-pressed={viewId === node.id}
-                  className="w-full text-left"
-                  onClick={() => {
-                    viewNode(node)
-                    focusNode(node)
-                  }}
-                >
-                  <BonusDetails node={node} status={null} />
-                </button>
-                {remaining > 0 && (
-                  <button
-                    type="button"
-                    className="mt-2 w-full rounded-lg bg-amber-700 py-1 text-center text-xs font-medium text-amber-50"
-                    onClick={() => {
-                      viewNode(node)
-                      queueNode(node.id)
-                    }}
-                  >
-                    Take
-                  </button>
-                )}
-              </div>
+                node={node}
+                status={null}
+                selected={viewId === node.id}
+                onOpen={() => {
+                  viewNode(node)
+                  focusNode(node)
+                }}
+                action={
+                  remaining > 0 ? (
+                    <button
+                      type="button"
+                      className={`shrink-0 rounded-md px-2.5 text-[11px] font-medium leading-none min-h-7 ${regionActionClass('take')}`}
+                      onClick={() => {
+                        viewNode(node)
+                        queueNode(node.id)
+                      }}
+                    >
+                      Take
+                    </button>
+                  ) : null
+                }
+              />
             ))}
           </div>
         )}
